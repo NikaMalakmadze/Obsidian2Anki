@@ -1,6 +1,22 @@
 from pydantic import BaseModel, Field
 
 
+class VaultNote(BaseModel):
+    title: str
+    tags: list[str]
+    content: str
+
+
+class Flashcard(BaseModel):
+    question: str
+    answer: str
+    tags: list[str]
+
+
+class FlashcardBatch(BaseModel):
+    cards: list[Flashcard]
+
+
 class AnkiCard(BaseModel):
     deck_name: str
     model_name: str = "Basic"
@@ -18,3 +34,8 @@ class AnkiCard(BaseModel):
             },
             "tags": self.tags,
         }
+
+
+class DeckParams(BaseModel):
+    cards: list[str] = Field(default_factory=list)
+    deck: str = ""
