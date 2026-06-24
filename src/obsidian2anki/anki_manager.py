@@ -1,40 +1,44 @@
-import requests
+from typing import Unpack
 
-from obsidian2anki.config import get_settings, Settings
-from obsidian2anki.models import AnkiCard
+from obsidian2anki.models import DeckParams, Flashcard, AnkiCard
+from obsidian2anki.utils.anki_connecter import AnkiConnecter
+from obsidian2anki.config import Settings, get_settings
+from obsidian2anki.utils.type import DeckParamsDict
 
 settings: Settings = get_settings()
 
 
-class AnkiManager:
+class AnkiManager(AnkiConnecter):
     def __init__(self) -> None:
-        self.anki_url = settings.ANKI_URL
+        super().__init__()
+        self.deck_name: str = settings.DECK_NAME
 
-    def connect(self, action: str, **params) -> dict:
-        try:
-            res = requests.post(
-                settings.ANKI_URL,
-                json={"action": action, "version": 6, "params": params},
-            ).json()
-            if len(res) != 2:
-                raise Exception("Response has an unexpected number of fields.")
-            if "error" not in res:
-                raise Exception("Response is missing required error field.")
-            if "result" not in res:
-                raise Exception("Response is missing required result field.")
-            if res["error"] is not None:
-                raise Exception(res["error"])
-            return res
-        except requests.exceptions.ConnectionError:
-            print("Error: Could not connect to Anki. Is the Anki application open?")
-            return None
+    def get_decks(self) -> list[str]:
+        return self.connect("deckNames")
 
+    def get_tags(self) -> list[str]:
+        return self.connect("getTags")
 
-m = AnkiManager()
-card = AnkiCard(
-    deck_name="Me",
-    front="Bla",
-    back="cat",
-    tags=["vocab", "animals"],
-)
-m.connect("addNote", note=card.serialize())
+    def create_deck(self, name: str = "", **params: Unpack[DeckParamsDict]) -> None:
+        validated = self._validate_params(DeckParams, params)
+        validated.deck = name if name else self.deck_name
+        v = self.connect("changeDeck", **validated.model_dump())
+        if not v:
+            print("Created Deck")
+
+    def add_cards(self, cards: list[Flashcard], deck_name: str = "") -> list[int]:
+        anki_cards: list[AnkiCard] = [
+            AnkiCard(
+                deck_name=deck_name if deck_name else self.deck_name,
+                front=card.question,
+                back=card.answer,
+                tags=card.tags,
+            )
+            for card in cards
+        ]
+
+        ids: list[int] = self.connect(
+            "addNotes", notes=[card.serialize() for card in anki_cards]
+        )
+
+        return ids
