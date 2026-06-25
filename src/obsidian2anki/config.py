@@ -14,8 +14,9 @@ class Settings(BaseSettings):
     DECK_NAME: str
 
     LOCAL_VAULT: str
-    IGNORE_FOLDERS: list[str]
-    IGNORE_FILES: list[str]
+    INBOX_FOLDER: str
+    PROCESSED_FOLDER: str
+    MAIN_NOTES_FOLDER: str
 
 
 @lru_cache
