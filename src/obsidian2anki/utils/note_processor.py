@@ -11,17 +11,23 @@ class NoteProcessor:
     def __init__(self) -> None:
         self.root: Path = Path(settings.LOCAL_VAULT)
 
-    def _process_files(self, dir: Path) -> list[VaultNote]:
+    def _process_files(self, dir_name: str) -> list[VaultNote]:
         notes: list[VaultNote] = [
             self._process_file(item)
-            for item in (self.root / dir).iterdir()
+            for item in (self.root / dir_name).iterdir()
             if item.is_file()
         ]
         return notes
 
     def _process_file(self, file: Path) -> VaultNote:
         name: str = file.name.split(".")[0]
-        lines: list[str] = file.read_text().split("\n")
+        lines: list[str] = file.read_text().splitlines()
         tags: list[str] = lines[0].replace("#", "").split()
         content: str = process_note_content(" ".join(lines[2:]))
-        return VaultNote(title=name, tags=tags, content=content)
+        return VaultNote(
+            title=name,
+            tags=tags,
+            content=content,
+            raw_content=lines,
+            path=str(file.resolve()),
+        )

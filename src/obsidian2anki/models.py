@@ -5,6 +5,7 @@ class VaultNote(BaseModel):
     title: str
     tags: list[str]
     content: str
+    path: str
 
 
 class Flashcard(BaseModel):
