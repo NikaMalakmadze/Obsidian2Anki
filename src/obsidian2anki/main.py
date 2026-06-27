@@ -1,27 +1,46 @@
-from obsidian2anki.vault_manager import VaultManager
-from obsidian2anki.anki_manager import AnkiManager
-from obsidian2anki.ai import AI
+import sys
 
+from obsidian2anki.core.vault_manager import VaultManager
+from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.config import get_settings, Settings
+from obsidian2anki.models import Flashcard
+from obsidian2anki.core.ai import AI
+
 
 settings: Settings = get_settings()
 
-v = VaultManager()
-ai = AI()
-am = AnkiManager()
 
-notes = v._process_files("00_Inbox")
+class Obsidian2Anki:
+    def __init__(self) -> None:
+        self._vault: VaultManager = VaultManager()
+        self._anki: AnkiManager = AnkiManager()
+        self._ai: AI = AI()
 
-print(notes)
+    def process(self) -> None:
+        notes = self._vault._process_files(settings.INBOX_FOLDER)
 
-names: list[str] = [note.title for note in notes]
+        if not notes:
+            print("No Notes Found")
 
-# cards = []
-# for note in notes:
-#     cards.extend(ai.generate_note_cards(note))
+        for note in notes:
+            flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
+            ids: list[int] = self._anki.add_cards(flash_cards)
+            self._vault.write_metadata(note, ids)
 
-# print(cards)
+    def delete_card(self, card_id: str):
+        try:
+            card_id: int = int(card_id)
+        except (ValueError, TypeError):
+            print("Invalid Id")
 
-# ids = am.add_cards(cards)
+        self._anki.delete_card(card_id)
 
-# print(ids)
+
+if __name__ == "__main__":
+    o2a: Obsidian2Anki = Obsidian2Anki()
+    if len(sys.argv) == 2:
+        o2a.delete_card(sys.argv[1])
+        print("Deleted")
+    else:
+        o2a.process()
+        print("Processed")
