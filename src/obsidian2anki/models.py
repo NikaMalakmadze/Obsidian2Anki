@@ -37,6 +37,15 @@ class AnkiCard(BaseModel):
         }
 
 
-class DeckParams(BaseModel):
-    cards: list[str] = Field(default_factory=list)
-    deck: str = ""
+class StateNote(BaseModel):
+    path: str
+    content_hash: str
+    card_count: int
+    anki_note_ids: list[int]
+    processed_at: str
+    updated_at: str
+
+
+class NoteInfo(BaseModel):
+    vault_info: VaultNote
+    card_ids: list[int]
