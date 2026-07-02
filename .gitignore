@@ -12,3 +12,7 @@ venv/
 # Environment variables and secrets
 .env
 *.env
+
+# State
+
+data

@@ -1,9 +1,9 @@
 from typing import Unpack
 
-from obsidian2anki.models import DeckParams, Flashcard, AnkiCard
+from obsidian2anki.utils.type import DeckParamsDict, DeckParams
 from obsidian2anki.utils.anki_connecter import AnkiConnecter
 from obsidian2anki.config import Settings, get_settings
-from obsidian2anki.utils.type import DeckParamsDict
+from obsidian2anki.models import Flashcard, AnkiCard
 
 settings: Settings = get_settings()
 
