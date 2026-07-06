@@ -31,16 +31,19 @@ class Obsidian2Anki:
             flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
             ids: list[int] = self._anki.add_cards(flash_cards)
             self._vault.write_metadata(note, ids)
-            self._state.update_state(NoteInfo(vault_info=note, card_ids=ids))
+            self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
 
-        if self._state.is_changed():
-            self._state.set_state()
+        self._state.set_state()
 
-    def delete_card(self, card_id: str):
+    def delete_card(self, card_id: str) -> None:
         try:
             card_id: int = int(card_id)
         except (ValueError, TypeError):
             print("Invalid Id")
+
+        if not self._state.delete_card(card_id):
+            print("Not Found")
+            return
 
         self._anki.delete_card(card_id)
 
