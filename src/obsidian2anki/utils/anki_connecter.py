@@ -42,13 +42,16 @@ class AnkiConnecter:
             return False
 
     @staticmethod
-    def open_anki() -> True:
+    def open_anki() -> None:
         path: str = shutil.which("anki")
+        if path is None:
+            print("Could not find 'anki' executable.")
+            return
         subprocess.Popen([path])
         time.sleep(2)
 
     @staticmethod
-    def _validate_params[T](validation_model: T, params: dict) -> T:
+    def _validate_params[T](validation_model: T, params: dict) -> T | None:
         try:
             validated = validation_model.model_validate(params)
             return validated
