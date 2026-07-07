@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class VaultNote(BaseModel):
+    id: str
     title: str
     tags: list[str]
     content: str
