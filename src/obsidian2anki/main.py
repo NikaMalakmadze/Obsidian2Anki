@@ -1,10 +1,10 @@
 import sys
 
+from obsidian2anki.models import Flashcard, NoteInfo, VaultNote
 from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.config import get_settings, Settings
-from obsidian2anki.models import Flashcard, NoteInfo
 from obsidian2anki.core.ai import AI
 
 
@@ -19,19 +19,17 @@ class Obsidian2Anki:
         self._ai: AI = AI()
 
     def process(self) -> None:
-        notes = self._vault._process_files(settings.INBOX_FOLDER)
+        notes = self._vault.get_inbox_notes(settings.INBOX_FOLDER)
 
         if not notes:
             print("No Notes Found")
+            return
 
-        for note in notes:
-            if self._state.in_state(note.title, note.content):
-                continue
-
-            flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
-            ids: list[int] = self._anki.add_cards(flash_cards)
-            self._vault.write_metadata(note, ids)
-            self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
+        [
+            self._process_note(note)
+            for note in notes
+            if not self._state.in_state(note.title, note.content)
+        ]
 
         self._state.set_state()
 
@@ -40,12 +38,22 @@ class Obsidian2Anki:
             card_id: int = int(card_id)
         except (ValueError, TypeError):
             print("Invalid Id")
+            return
 
         if not self._state.delete_card(card_id):
             print("Not Found")
             return
 
         self._anki.delete_card(card_id)
+
+    def _process_note(self, note: VaultNote) -> None:
+        try:
+            flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
+            ids: list[int] = self._anki.add_cards(flash_cards)
+            self._vault.write_metadata(note, ids)
+            self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
+        except Exception as e:
+            print(f"Failed processing {note.title}: {e}")
 
 
 if __name__ == "__main__":
