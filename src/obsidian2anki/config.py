@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     STATE_FOLDER: str
 
     API_KEY: str
+    PROMPT_FILE: str
 
     ANKI_URL: str
     DECK_NAME: str
