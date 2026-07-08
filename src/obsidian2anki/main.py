@@ -19,17 +19,13 @@ class Obsidian2Anki:
         self._ai: AI = AI()
 
     def process(self) -> None:
-        notes = self._vault.get_inbox_notes(settings.INBOX_FOLDER)
+        notes = self._vault.get_folder_notes(settings.INBOX_FOLDER)
 
         if not notes:
             print("No Notes Found")
             return
 
-        [
-            self._process_note(note)
-            for note in notes
-            if not self._state.in_state(note.title, note.content)
-        ]
+        [self._process_note(note) for note in notes]
 
         self._state.set_state()
 

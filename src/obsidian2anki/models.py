@@ -39,6 +39,7 @@ class AnkiCard(BaseModel):
 
 
 class StateNote(BaseModel):
+    title: str
     path: str
     content_hash: str
     card_count: int
