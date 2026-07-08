@@ -18,19 +18,13 @@ class StateManager:
         self._is_changed: bool = False
         self._load_state()
 
-    def in_state(self, note_title: str, note_content: str) -> bool:
-        content_hash: str = sha256(note_content.encode("utf-8")).hexdigest()
-        return (
-            note_title in self._state
-            and content_hash == self._state[note_title].content_hash
-        )
-
     def prepare_for_state(self, note: NoteInfo) -> None:
         content_hash: str = sha256(note.vault_info.content.encode("utf-8")).hexdigest()
 
         curr_datetime: datetime = datetime.now(timezone.utc)
 
         state_note: StateNote = StateNote(
+            title=note.vault_info.title,
             path=note.vault_info.path,
             anki_note_ids=note.card_ids,
             processed_at=curr_datetime.isoformat(),
@@ -39,7 +33,7 @@ class StateManager:
             content_hash=content_hash,
         )
 
-        self._temp_data.append((note.vault_info.title, state_note))
+        self._temp_data.append((note.vault_info.id, state_note))
 
         self._is_changed = True
 
