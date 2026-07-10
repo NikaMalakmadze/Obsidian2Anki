@@ -13,12 +13,14 @@ class Settings(BaseSettings):
     API_KEY: str
     PROMPT_FILE: str
 
+    INCLUDE_TAGS: list[str]
+    EXLUDE_TAGS: list[str]
+
     ANKI_URL: str
     DECK_NAME: str
 
     LOCAL_VAULT: str
     INBOX_FOLDER: str
-    PROCESSED_FOLDER: str
     MAIN_NOTES_FOLDER: str
 
 
