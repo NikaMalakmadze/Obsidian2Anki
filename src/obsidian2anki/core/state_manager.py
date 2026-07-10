@@ -18,6 +18,18 @@ class StateManager:
         self._is_changed: bool = False
         self._load_state()
 
+    def in_state(self, note_id: str) -> bool:
+        return note_id in self._state
+
+    def has_changed(self, note_id: str, note_title: str, note_content: str) -> bool:
+        note: StateNote | None = self._state.get(note_id)
+        if not note:
+            return False
+
+        content_hash: str = sha256(note_content.encode("utf-8")).hexdigest()
+
+        return note.content_hash != content_hash or note.title != note_title
+
     def prepare_for_state(self, note: NoteInfo) -> None:
         content_hash: str = sha256(note.vault_info.content.encode("utf-8")).hexdigest()
 
