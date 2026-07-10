@@ -18,14 +18,34 @@ class Obsidian2Anki:
         self._anki: AnkiManager = AnkiManager()
         self._ai: AI = AI()
 
+    def migrate(self) -> None:
+        main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
+            settings.MAIN_NOTES_FOLDER
+        )
+
+        for note in main_folder_notes:
+            if any(tag in note.tags for tag in settings.EXLUDE_TAGS):
+                continue
+
+            if not any(tag in note.tags for tag in settings.INCLUDE_TAGS):
+                continue
+
+            if not self._state.in_state(note.id) or self._state.has_changed(
+                note.id, note.title, note.content
+            ):
+                self._process_note(note)
+
+        self._state.set_state()
+
     def process(self) -> None:
-        notes = self._vault.get_folder_notes(settings.INBOX_FOLDER)
+        notes: list[VaultNote] = self._vault.get_folder_notes(settings.INBOX_FOLDER)
 
         if not notes:
             print("No Notes Found")
             return
 
-        [self._process_note(note) for note in notes]
+        for note in notes:
+            self._process_note(note)
 
         self._state.set_state()
 
