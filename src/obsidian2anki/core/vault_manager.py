@@ -18,11 +18,11 @@ class VaultManager(NoteProcessor):
 
         file.write_text("\n".join(lines), encoding="utf-8")
 
-        processed_folder_path: Path = (
-            Path(settings.LOCAL_VAULT) / settings.PROCESSED_FOLDER
+        main_notes_folder_path: Path = (
+            Path(settings.LOCAL_VAULT) / settings.MAIN_NOTES_FOLDER
         )
 
-        file.rename(processed_folder_path / file.name)
+        file.rename(main_notes_folder_path / file.name)
 
     def ensure_note_uuids(self) -> None:
         main_notes_folder_path: Path = (
