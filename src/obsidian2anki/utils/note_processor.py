@@ -1,4 +1,6 @@
+from frontmatter import Post
 from pathlib import Path
+import frontmatter
 
 from obsidian2anki.utils.helpers import process_note_content
 from obsidian2anki.config import get_settings, Settings
@@ -20,16 +22,15 @@ class NoteProcessor:
         return notes
 
     def _process_file(self, file: Path) -> VaultNote:
-        name: str = file.name.split(".")[0]
-        lines: list[str] = file.read_text(encoding="utf-8").splitlines()
-        id: str = lines[1].split(":")[1].strip()
-        tags: list[str] = lines[3].replace("#", "").split()
-        content: str = process_note_content(" ".join(lines[5:]))
+        note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
+
         return VaultNote(
-            id=id,
-            title=name,
-            tags=tags,
-            content=content,
-            raw_content=lines,
+            id=note["id"],
+            title=file.name.split(".")[0],
+            tags=note.get("tags") if isinstance(note.get("tags"), list) else [],
+            content=process_note_content(note.content.replace("\n", " ")),
             path=str(file.resolve()),
+            anki_cards=[int(x.strip()) for x in note.get("anki_cards", "").split(",")]
+            if note.get("anki_cards")
+            else [],
         )
