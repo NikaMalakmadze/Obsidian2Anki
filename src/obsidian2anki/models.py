@@ -7,6 +7,7 @@ class VaultNote(BaseModel):
     tags: list[str]
     content: str
     path: str
+    anki_cards: list[int]
 
 
 class Flashcard(BaseModel):
