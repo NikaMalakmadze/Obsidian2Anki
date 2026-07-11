@@ -24,7 +24,7 @@ class VaultManager(NoteProcessor):
 
         file.rename(main_notes_folder_path / file.name)
 
-    def ensure_note_uuids(self) -> None:
+    def ensure_note_format(self) -> None:
         main_notes_folder_path: Path = (
             Path(settings.LOCAL_VAULT) / settings.MAIN_NOTES_FOLDER
         )
@@ -35,9 +35,13 @@ class VaultManager(NoteProcessor):
 
             lines: list[str] = file.read_text(encoding="utf-8").splitlines()
 
+            tags: list[str] = [tag.removeprefix("#") for tag in lines.pop(0).split()]
+
             new_content: list[str] = [
                 "---",
                 f"id: {str(uuid.uuid4())}",
+                "tags:",
+                *[f"  - {tag}" for tag in tags],
                 "---",
             ] + lines
 
