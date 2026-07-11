@@ -60,9 +60,24 @@ class StateManager:
             note_info.anki_note_ids.remove(card_id)
             found = True
 
+        if found:
+            self._is_changed = True
+            self.set_state()
+        return found
+
+    def delete_note_cards(self, note_id: str) -> bool:
+        note: StateNote | None = self._state.get(note_id)
+        if not note:
+            return False
+
+        curr_datetime: str = datetime.now(timezone.utc).isoformat()
+        note.updated_at = curr_datetime
+        note.anki_note_ids = []
+
         self._is_changed = True
         self.set_state()
-        return found
+
+        return True
 
     def set_state(self) -> None:
         if not self._is_changed:
