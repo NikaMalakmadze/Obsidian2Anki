@@ -62,8 +62,15 @@ class Obsidian2Anki:
 
         self._anki.delete_card(card_id)
 
+    def delete_note_cards(self, note_id: str, card_ids: list[int]) -> None:
+        self._state.delete_note_cards(note_id)
+
+        for card_id in card_ids:
+            self._anki.delete_card(card_id)
+
     def _process_note(self, note: VaultNote) -> None:
         try:
+            note.anki_cards and self.delete_note_cards(note.id, note.anki_cards)
             flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
             ids: list[int] = self._anki.add_cards(flash_cards)
             self._vault.write_metadata(note, ids)
