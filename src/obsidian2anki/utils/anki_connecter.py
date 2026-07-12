@@ -1,7 +1,8 @@
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel
 from typing import Any
 import subprocess
 import requests
+import logging
 import shutil
 import time
 
@@ -10,6 +11,7 @@ from obsidian2anki.utils.type import Action
 
 
 settings: Settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class AnkiConnecter:
@@ -22,18 +24,19 @@ class AnkiConnecter:
 
         try:
             payload = {"action": action, "version": 6, "params": params}
-            res = requests.post(settings.ANKI_URL, json=payload).json()
-            self._validate_res(res)
-            return res["result"]
-        except requests.exceptions.ConnectionError:
-            print("Error: Could not connect to Anki. Is the Anki application open?")
-        return None
+            response = requests.post(self.anki_url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            self._validate_res(result)
+            return result["result"]
+        except requests.RequestException:
+            logger.exception("Could not connect to Anki. Is the Anki application open?")
+            return None
 
-    @staticmethod
-    def anki_running() -> bool:
+    def anki_running(self) -> bool:
         try:
             requests.post(
-                settings.ANKI_URL,
+                self.anki_url,
                 json={"action": "version", "version": 6},
                 timeout=1,
             )
@@ -45,27 +48,30 @@ class AnkiConnecter:
     def open_anki() -> None:
         path: str = shutil.which("anki")
         if path is None:
-            print("Could not find 'anki' executable.")
+            logger.error("Could not find 'anki' executable.")
             return
         subprocess.Popen([path])
+        logger.info("Starting Anki...")
         time.sleep(2)
 
     @staticmethod
-    def _validate_params[T](validation_model: T, params: dict) -> T | None:
+    def _validate_params[T: BaseModel](
+        validation_model: type[T], params: dict
+    ) -> T | None:
         try:
             validated = validation_model.model_validate(params)
             return validated
         except ValidationError:
-            print("Error: Invalid Params.")
+            logger.exception("Invalid Params.")
             return None
 
     @staticmethod
-    def _validate_res(res):
+    def _validate_res(res: dict[str, Any]) -> None:
         if len(res) != 2:
-            raise Exception("Response has an unexpected number of fields.")
+            raise ValueError("Response has an unexpected number of fields.")
         if "error" not in res:
-            raise Exception("Response is missing required error field.")
+            raise ValueError("Response is missing required error field.")
         if "result" not in res:
-            raise Exception("Response is missing required result field.")
+            raise ValueError("Response is missing required result field.")
         if res["error"] is not None:
-            raise Exception(res["error"])
+            raise ValueError(res["error"])

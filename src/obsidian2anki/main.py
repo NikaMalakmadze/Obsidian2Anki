@@ -1,3 +1,4 @@
+import logging
 import sys
 
 from obsidian2anki.models import Flashcard, NoteInfo, VaultNote
@@ -5,10 +6,12 @@ from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.config import get_settings, Settings
+from obsidian2anki.utils.logger import setup_logger
 from obsidian2anki.core.ai import AI
 
 
 settings: Settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class Obsidian2Anki:
@@ -19,29 +22,44 @@ class Obsidian2Anki:
         self._ai: AI = AI()
 
     def migrate(self) -> None:
+        logger.info("Starting migration.")
+
         main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
             settings.MAIN_NOTES_FOLDER
         )
 
+        logger.info(
+            "Found %d notes in '%s'.",
+            len(main_folder_notes),
+            settings.MAIN_NOTES_FOLDER,
+        )
+
         for note in main_folder_notes:
-            if any(tag in note.tags for tag in settings.EXLUDE_TAGS):
+            should_continue: bool = any(
+                tag in note.tags for tag in settings.EXLUDE_TAGS
+            ) or not any(tag in note.tags for tag in settings.INCLUDE_TAGS)
+
+            should_process: bool = not self._state.in_state(
+                note.id
+            ) or self._state.has_changed(note.id, note.title, note.content)
+
+            if should_continue:
                 continue
 
-            if not any(tag in note.tags for tag in settings.INCLUDE_TAGS):
-                continue
-
-            if not self._state.in_state(note.id) or self._state.has_changed(
-                note.id, note.title, note.content
-            ):
+            if should_process:
                 self._process_note(note)
 
         self._state.set_state()
 
+        logger.info("Migration completed.")
+
     def process(self) -> None:
+        logger.info("Starting processing notes.")
+
         notes: list[VaultNote] = self._vault.get_folder_notes(settings.INBOX_FOLDER)
 
         if not notes:
-            print("No Notes Found")
+            logger.info("No notes found in '%s'.", settings.INBOX_FOLDER)
             return
 
         for note in notes:
@@ -49,18 +67,22 @@ class Obsidian2Anki:
 
         self._state.set_state()
 
+        logger.info("Finished processing notes.")
+
     def delete_card(self, card_id: str) -> None:
         try:
             card_id: int = int(card_id)
         except (ValueError, TypeError):
-            print("Invalid Id")
+            logger.error("Invalid card ID: %s", card_id)
             return
 
         if not self._state.delete_card(card_id):
-            print("Not Found")
+            logger.warning("Card %d not found in state.", card_id)
             return
 
         self._anki.delete_card(card_id)
+
+        logger.info("Deleted card %d.", card_id)
 
     def delete_note_cards(self, note_id: str, card_ids: list[int]) -> None:
         self._state.delete_note_cards(note_id)
@@ -75,11 +97,12 @@ class Obsidian2Anki:
             ids: list[int] = self._anki.add_cards(flash_cards)
             self._vault.write_metadata(note, ids)
             self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
-        except Exception as e:
-            print(f"Failed processing {note.title}: {e}")
+        except Exception:
+            logger.exception("Failed processing note '%s'.", note.title)
 
 
 if __name__ == "__main__":
+    setup_logger()
     o2a: Obsidian2Anki = Obsidian2Anki()
     if len(sys.argv) == 2:
         o2a.delete_card(sys.argv[1])

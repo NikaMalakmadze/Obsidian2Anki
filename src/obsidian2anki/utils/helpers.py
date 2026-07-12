@@ -1,6 +1,7 @@
 import re
 
 REPLACEMENTS: list[tuple[str, str] | tuple[str, str, str]] = [
+    (r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$", "", re.MULTILINE),  # horizontal rules
     (r"\*\*(.*?)\*\*", r"\1"),  # **bold**
     (r"\*(.*?)\*", r"\1"),  # *italic*
     (r"__(.*?)__", r"\1"),  # __bold__
