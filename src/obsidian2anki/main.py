@@ -1,3 +1,4 @@
+from pathlib import Path
 import logging
 import sys
 
@@ -58,6 +59,12 @@ class Obsidian2Anki:
 
         notes: list[VaultNote] = self._vault.get_folder_notes(settings.INBOX_FOLDER)
 
+        logger.info(
+            "Found %d notes in '%s'.",
+            len(notes),
+            settings.INBOX_FOLDER,
+        )
+
         if not notes:
             logger.info("No notes found in '%s'.", settings.INBOX_FOLDER)
             return
@@ -68,6 +75,23 @@ class Obsidian2Anki:
         self._state.set_state()
 
         logger.info("Finished processing notes.")
+
+    def clear(self) -> None:
+        logger.info("Started clearing everything")
+
+        state = self._state.state
+
+        logger.info("Founded %d notes in state", len(state))
+
+        for id, info in state.items():
+            self.delete_note_cards(id, info.anki_note_ids)
+            self._vault.remove_property(Path(info.path))
+
+            logger.info("Deleted note with id: '%s'", id)
+
+        self._state.clear_state()
+
+        logger.info("Finished clearing everything")
 
     def delete_card(self, card_id: str) -> None:
         try:
@@ -92,11 +116,27 @@ class Obsidian2Anki:
 
     def _process_note(self, note: VaultNote) -> None:
         try:
-            note.anki_cards and self.delete_note_cards(note.id, note.anki_cards)
+            if note.anki_cards:
+                self.delete_note_cards(note.id, note.anki_cards)
+                logger.info(
+                    "Deleted %d cards of note with id: '%s'.",
+                    len(note.anki_cards),
+                    note.id,
+                )
             flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
+
+            logger.info(
+                "Generated %d flash cards for note with id: '%s'.",
+                len(flash_cards),
+                note.id,
+            )
+
             ids: list[int] = self._anki.add_cards(flash_cards)
             self._vault.write_metadata(note, ids)
             self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
+
+            logger.info("Processed note with id: '%s'.", note.id)
+
         except Exception:
             logger.exception("Failed processing note '%s'.", note.title)
 
