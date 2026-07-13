@@ -21,3 +21,6 @@ def setup_logger(level=logging.INFO):
             logging.StreamHandler(),
         ],
     )
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)

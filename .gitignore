@@ -14,5 +14,7 @@ venv/
 *.env
 
 # State
-
 data
+
+# Logs
+logs

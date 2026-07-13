@@ -24,6 +24,8 @@ class VaultManager(NoteProcessor):
 
         file.rename(main_notes_folder_path / file.name)
 
+        note.path = str((main_notes_folder_path / file.name).resolve())
+
     def ensure_note_format(self) -> None:
         main_notes_folder_path: Path = (
             Path(settings.LOCAL_VAULT) / settings.MAIN_NOTES_FOLDER
