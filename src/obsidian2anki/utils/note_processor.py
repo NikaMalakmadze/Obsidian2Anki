@@ -21,6 +21,16 @@ class NoteProcessor:
         ]
         return notes
 
+    def remove_property(self, file: Path, property: str = "anki_cards") -> None:
+        note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
+
+        if property in note:
+            del note[property]
+
+        file.write_text(
+            frontmatter.dumps(note).replace("\n\n", "\n", 1), encoding="utf-8"
+        )
+
     def _process_file(self, file: Path) -> VaultNote:
         note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
 
