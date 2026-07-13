@@ -18,6 +18,15 @@ class StateManager:
         self._is_changed: bool = False
         self._load_state()
 
+    @property
+    def state(self) -> dict[str, StateNote]:
+        return self._state
+
+    def clear_state(self) -> None:
+        self._state = {}
+        self._is_changed = True
+        self.set_state()
+
     def in_state(self, note_id: str) -> bool:
         return note_id in self._state
 
