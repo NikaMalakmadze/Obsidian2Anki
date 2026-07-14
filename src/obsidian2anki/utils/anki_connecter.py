@@ -29,30 +29,35 @@ class AnkiConnecter:
             result = response.json()
             self._validate_res(result)
             return result["result"]
-        except requests.RequestException:
+        except (requests.RequestException, ValueError):
             logger.exception("Could not connect to Anki. Is the Anki application open?")
             return None
 
     def anki_running(self) -> bool:
         try:
-            requests.post(
+            response = requests.post(
                 self.anki_url,
                 json={"action": "version", "version": 6},
                 timeout=1,
             )
-            return True
-        except requests.RequestException:
+            response.raise_for_status()
+            data = response.json()
+            return data.get("error") is None
+        except (requests.RequestException, ValueError):
             return False
 
-    @staticmethod
-    def open_anki() -> None:
+    def open_anki(self) -> None:
         path: str = shutil.which("anki")
         if path is None:
             logger.error("Could not find 'anki' executable.")
             return
         subprocess.Popen([path])
         logger.info("Starting Anki...")
-        time.sleep(2)
+        for _ in range(20):
+            if not self.anki_running():
+                time.sleep(1)
+
+    logger.error("Anki did not start in time.")
 
     @staticmethod
     def _validate_params[T: BaseModel](
