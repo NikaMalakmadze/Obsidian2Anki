@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     INBOX_FOLDER: str
     MAIN_NOTES_FOLDER: str
 
+    MAX_RETRIES_ON_ANKI_DUBLICATE_CARD: int
+
 
 @lru_cache
 def get_settings() -> Settings:
