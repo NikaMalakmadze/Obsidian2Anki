@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 
 from obsidian2anki.config import Settings, get_settings, BASE_DIR
+from obsidian2anki.utils.type import StateNoteProperties
 from obsidian2anki.models import StateNote, NoteInfo
 
 settings: Settings = get_settings()
@@ -18,14 +19,10 @@ class StateManager:
         self._is_changed: bool = False
         self._load_state()
 
-    @property
-    def state(self) -> dict[str, StateNote]:
-        return self._state
-
     def clear_state(self) -> None:
         self._state = {}
         self._is_changed = True
-        self.set_state()
+        self.save()
 
     def in_state(self, note_id: str) -> bool:
         return note_id in self._state
@@ -38,6 +35,15 @@ class StateManager:
         content_hash: str = sha256(note_content.encode("utf-8")).hexdigest()
 
         return note.content_hash != content_hash or note.title != note_title
+
+    def get_state_items(self) -> list[tuple[str, StateNote]]:
+        return list(self._state.items())
+
+    def get_property_of(self, id: str, property: StateNoteProperties):
+        note: StateNote | None = self._state.get(id)
+        if not note:
+            return
+        return getattr(note, property)
 
     def prepare_for_state(self, note: NoteInfo) -> None:
         content_hash: str = sha256(note.vault_info.content.encode("utf-8")).hexdigest()
@@ -58,21 +64,21 @@ class StateManager:
 
         self._is_changed = True
 
-    def delete_card(self, card_id: int) -> bool:
-        found: bool = False
-        for note_info in self._state.values():
+    def delete_card(self, card_id: int) -> str | None:
+        note_id: str | None = None
+        for id, note_info in self._state.items():
             if card_id not in note_info.anki_note_ids:
                 continue
 
             curr_datetime: str = datetime.now(timezone.utc).isoformat()
             note_info.updated_at = curr_datetime
             note_info.anki_note_ids.remove(card_id)
-            found = True
+            note_id = id
 
-        if found:
+        if note_id:
             self._is_changed = True
-            self.set_state()
-        return found
+            self.save()
+        return note_id
 
     def delete_note_cards(self, note_id: str) -> bool:
         note: StateNote | None = self._state.get(note_id)
@@ -84,11 +90,11 @@ class StateManager:
         note.anki_note_ids = []
 
         self._is_changed = True
-        self.set_state()
+        self.save()
 
         return True
 
-    def set_state(self) -> None:
+    def save(self) -> None:
         if not self._is_changed:
             return
 
