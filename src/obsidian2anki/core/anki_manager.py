@@ -21,12 +21,16 @@ class AnkiManager(AnkiConnecter):
 
     def create_deck(self, name: str = "", **params: Unpack[DeckParamsDict]) -> None:
         validated = self._validate_params(DeckParams, params)
+        if validated is None:
+            return
         validated.deck = name if name else self.deck_name
         v = self.connect("changeDeck", **validated.model_dump())
         if not v:
             print("Created Deck")
 
-    def add_cards(self, cards: list[Flashcard], deck_name: str = "") -> list[int]:
+    def add_cards(
+        self, note_id: str, cards: list[Flashcard], deck_name: str = ""
+    ) -> list[int] | None:
         if self.deck_name not in self.get_decks():
             self.create_deck(self.deck_name)
 
@@ -39,11 +43,12 @@ class AnkiManager(AnkiConnecter):
                 front=card.question,
                 back=card.answer,
                 tags=card.tags,
+                note_id=note_id,
             )
             for card in cards
         ]
 
-        ids: list[int] = self.connect(
+        ids: list[int] | None = self.connect(
             "addNotes", notes=[card.serialize() for card in anki_cards]
         )
 

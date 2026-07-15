@@ -34,6 +34,7 @@ class AnkiConnecter:
             return None
 
     def anki_running(self) -> bool:
+        logger.info("Trying to connect with anki.")
         try:
             response = requests.post(
                 self.anki_url,
@@ -42,8 +43,10 @@ class AnkiConnecter:
             )
             response.raise_for_status()
             data = response.json()
+            logger.info("Anki responded successfuly.")
             return data.get("error") is None
         except (requests.RequestException, ValueError):
+            logger.info("Error when trying to connect with anki.")
             return False
 
     def open_anki(self) -> None:
@@ -57,7 +60,7 @@ class AnkiConnecter:
             if not self.anki_running():
                 time.sleep(1)
 
-    logger.error("Anki did not start in time.")
+        logger.error("Anki did not start in time.")
 
     @staticmethod
     def _validate_params[T: BaseModel](
