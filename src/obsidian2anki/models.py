@@ -25,6 +25,7 @@ class AnkiCard(BaseModel):
     model_name: str = "Basic"
     front: str
     back: str
+    note_id: str
     tags: list[str] = Field(default_factory=list)
 
     def serialize(self) -> dict:
@@ -34,6 +35,7 @@ class AnkiCard(BaseModel):
             "fields": {
                 "Front": self.front,
                 "Back": self.back,
+                "NoteID": self.note_id,
             },
             "tags": self.tags,
         }
