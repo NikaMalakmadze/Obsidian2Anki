@@ -34,7 +34,12 @@ class StateManager:
 
         content_hash: str = sha256(note_content.encode("utf-8")).hexdigest()
 
-        return note.content_hash != content_hash or note.title != note_title
+        is_changed: bool = note.content_hash != content_hash or note.title != note_title
+
+        if is_changed:
+            note.updated_at = datetime.now(timezone.utc).isoformat()
+
+        return is_changed
 
     def get_state_items(self) -> list[tuple[str, StateNote]]:
         return list(self._state.items())
@@ -44,6 +49,12 @@ class StateManager:
         if not note:
             return
         return getattr(note, property)
+
+    def delete_state_item(self, id: str) -> None:
+        if id in self._state:
+            del self._state[id]
+            self._is_changed = True
+            self.save()
 
     def prepare_for_state(self, note: NoteInfo) -> None:
         content_hash: str = sha256(note.vault_info.content.encode("utf-8")).hexdigest()
