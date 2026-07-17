@@ -62,8 +62,8 @@ class MigrationService:
         logger.info(
             "Found %d notes requiring processing out of %d notes in '%s' folder.",
             len(main_folder_notes),
-            settings.MAIN_NOTES_FOLDER,
             total_need_processing,
+            settings.MAIN_NOTES_FOLDER,
         )
 
         c: int = 0

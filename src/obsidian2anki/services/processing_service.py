@@ -38,4 +38,5 @@ class ProcessingService:
         )
 
         for note in notes:
-            self._note_processor.process_note(note)
+            if self._note_processor.has_right_tags(note):
+                self._note_processor.process_note(note)
