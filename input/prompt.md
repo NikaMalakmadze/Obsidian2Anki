@@ -13,8 +13,10 @@ Rules:
    - Focus on common interview questions.
    - Focus on common mistakes.
 5. Do not generate duplicate cards.
+   - Avoid creating cards that test the same concept with different wording.
+   - Each card must cover a unique idea from the note.
 6. Keep answers concise.
 7. Generate between 1 and 5 cards depending on note complexity.
-8. Preserve the language of the note. If the note is Georgian, cards should be Georgian.
+8. Preserve the language of the note. Write On English!!!
 
 Note:
