@@ -33,7 +33,9 @@ class VaultManager:
             frontmatter.dumps(note).replace("\n\n", "\n", 1), encoding="utf-8"
         )
 
-    def remove_list_item(self, file: Path, list_name: str, item: str) -> None:
+    def remove_list_item(
+        self, file: Path, list_name: str, item: str
+    ) -> list[str] | None:
         note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
 
         note_list_property: str = note.get(list_name, "")
@@ -41,17 +43,18 @@ class VaultManager:
         if not note_list_property:
             return
 
-        note_list: list[str] = [
-            i.strip() for i in note_list_property.split(",") if i.strip() != item
-        ]
+        note_list: list[str] = [i.strip() for i in note_list_property.split(",")]
+        if item.strip() in note_list:
+            note_list.remove(item.strip())
 
         if not note_list:
-            self.remove_property(file)
-            return
+            return self.remove_property(file)
 
         note[list_name] = ", ".join(note_list)
 
         file.write_text(frontmatter.dumps(note), encoding="utf-8")
+
+        return note_list
 
     def write_metadata(self, note: VaultNote, flash_card_ids: list[int]) -> None:
         file: Path = Path(note.path)
