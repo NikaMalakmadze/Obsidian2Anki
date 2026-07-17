@@ -35,13 +35,24 @@ class NoteProcessor:
 
     def has_right_tags(self, note: VaultNote) -> bool:
         """Whether a note has right tags to be processed"""
-        return all(tag not in note.tags for tag in settings.EXLUDE_TAGS) and any(
+        has_no_excluded_tags = not any(tag in note.tags for tag in settings.EXLUDE_TAGS)
+
+        has_required_include_tag = not settings.INCLUDE_TAGS or any(
             tag in note.tags for tag in settings.INCLUDE_TAGS
         )
+
+        return has_no_excluded_tags and has_required_include_tag
 
     def process_note(self, note: VaultNote) -> bool:
         """Generate flashcards for a single note. Returns success/failure."""
         try:
+            if not note.content:
+                logger.info(
+                    "No Content Found in note with id: '%s'.",
+                    note.id,
+                )
+                return True
+
             if note.anki_cards:
                 self.delete_note_cards(note.id, note.anki_cards)
                 logger.info(
