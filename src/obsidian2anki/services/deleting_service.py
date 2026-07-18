@@ -1,5 +1,5 @@
-import logging
 from pathlib import Path
+import logging
 
 from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.state_manager import StateManager
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 settings: Settings = get_settings()
 
 
-class DeleteCardService:
+class DeletingService:
     def __init__(
         self, vault: VaultManager, state: StateManager, anki: AnkiManager
     ) -> None:
@@ -38,3 +38,17 @@ class DeleteCardService:
         )
         if not ids_list:
             self._state.delete_state_item(note_id)
+
+    def delete_note(self, note_id: str) -> None:
+        if not self._state.in_state(note_id):
+            logger.info("Note with id: '%s' is not in state", note_id)
+
+        note_path: Path = Path(self._state.get_property_of(note_id, "path"))
+        note_cards: list[int] = self._state.get_property_of(note_id, "anki_note_ids")
+
+        for note_card in note_cards:
+            self._anki.delete_card(note_card)
+
+        self._vault.remove_property(note_path)
+
+        self._state.delete_state_item(note_id)
