@@ -14,7 +14,9 @@ venv/
 *.env
 
 # State
-data
+data/*
+!data/.gitkeep
 
 # Logs
-logs
+logs/*
+!logs/.gitkeep

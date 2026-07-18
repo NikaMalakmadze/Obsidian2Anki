@@ -1,0 +1,6 @@
+---
+id: <% crypto.randomUUID() %>
+tags:
+---
+
+---
