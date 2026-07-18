@@ -1,6 +1,6 @@
-from obsidian2anki.services.delete_card_service import DeleteCardService
 from obsidian2anki.services.processing_service import ProcessingService
 from obsidian2anki.services.migration_service import MigrationService
+from obsidian2anki.services.deleting_service import DeletingService
 from obsidian2anki.services.clear_service import ClearService
 
 from obsidian2anki.core.note_processor import NoteProcessor
@@ -31,4 +31,4 @@ class Dependencies:
             self.vault, self.state, self.note_processor
         )
         self._clear = ClearService(self.vault, self.state, self.note_processor)
-        self._card_deleting = DeleteCardService(self.vault, self.state, self.anki)
+        self._deleting = DeletingService(self.vault, self.state, self.anki)

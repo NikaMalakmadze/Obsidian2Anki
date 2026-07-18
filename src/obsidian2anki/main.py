@@ -18,7 +18,9 @@ def main(argv: list[str] | None = None) -> int:
         "migrate": app.migrate,
         "process": app.process,
         "clear": app.clear,
+        "format-notes": app.format_notes,
         "delete-card": lambda: app.delete_card(args.card_id),
+        "delete-note": lambda: app.delete_note(args.note_id),
     }
 
     try:
