@@ -35,7 +35,9 @@ class NoteProcessor:
 
     def has_right_tags(self, note: VaultNote) -> bool:
         """Whether a note has right tags to be processed"""
-        has_no_excluded_tags = not any(tag in note.tags for tag in settings.EXLUDE_TAGS)
+        has_no_excluded_tags = not any(
+            tag in note.tags for tag in settings.EXCLUDE_TAGS
+        )
 
         has_required_include_tag = not settings.INCLUDE_TAGS or any(
             tag in note.tags for tag in settings.INCLUDE_TAGS
@@ -72,14 +74,14 @@ class NoteProcessor:
 
             tries: int = 0
 
-            while not ids and tries < settings.MAX_RETRIES_ON_ANKI_DUBLICATE_CARD:
+            while not ids and tries < settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD:
                 tries += 1
 
                 logger.warning(
                     "Failed to add cards for note '%s'. Retrying (%d/%d).",
                     note.id,
                     tries,
-                    settings.MAX_RETRIES_ON_ANKI_DUBLICATE_CARD,
+                    settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
                 )
 
                 flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
@@ -96,7 +98,7 @@ class NoteProcessor:
                 logger.error(
                     "Failed to add cards for note '%s' after %d attempts.",
                     note.id,
-                    settings.MAX_RETRIES_ON_ANKI_DUBLICATE_CARD,
+                    settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
                 )
                 return False
 

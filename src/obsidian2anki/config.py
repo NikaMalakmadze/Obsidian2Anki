@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     PROMPT_FILE: str
 
     INCLUDE_TAGS: list[str]
-    EXLUDE_TAGS: list[str]
+    EXCLUDE_TAGS: list[str]
 
     ANKI_URL: str
     DECK_NAME: str
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     INBOX_FOLDER: str
     MAIN_NOTES_FOLDER: str
 
-    MAX_RETRIES_ON_ANKI_DUBLICATE_CARD: int
+    MAX_RETRIES_ON_ANKI_DUPLICATE_CARD: int
 
 
 @lru_cache
