@@ -39,13 +39,13 @@ class Obsidian2Anki:
         migration: MigrationService,
         processing: ProcessingService,
         clearing: ClearService,
-        card_deleting: DeletingService,
+        deleting: DeletingService,
         note_formatter: NoteFormatterService,
     ) -> None:
         self._migration = migration
         self._processing = processing
         self._clearing = clearing
-        self._card_deleting = card_deleting
+        self._deleting = deleting
         self._note_formatter = note_formatter
 
     def migrate(self) -> None:
@@ -86,7 +86,7 @@ class Obsidian2Anki:
             card_id: The unique identifier of the Anki card to delete.
         """
         logger.info("Starting deleting card with id: `%s`.", card_id)
-        self._card_deleting.delete_card(card_id)
+        self._deleting.delete_card(card_id)
         logger.info("Ended deleting card with id`%s`.", card_id)
 
     def delete_note(self, note_id: str) -> None:
@@ -96,7 +96,7 @@ class Obsidian2Anki:
             note_id: The unique identifier of the vault note to delete.
         """
         logger.info("Starting deleting note with id: `%s`.", note_id)
-        self._card_deleting.delete_note(note_id)
+        self._deleting.delete_note(note_id)
         logger.info("Ended deleting card note id`%s`.", note_id)
 
     def format_notes(self) -> None:

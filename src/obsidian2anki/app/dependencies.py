@@ -1,3 +1,4 @@
+from obsidian2anki.services.notes_formatter import NoteFormatterService
 from obsidian2anki.services.processing_service import ProcessingService
 from obsidian2anki.services.migration_service import MigrationService
 from obsidian2anki.services.deleting_service import DeletingService
@@ -32,3 +33,6 @@ class Dependencies:
         )
         self._clear = ClearService(self.vault, self.state, self.note_processor)
         self._deleting = DeletingService(self.vault, self.state, self.anki)
+        self._note_formatting = NoteFormatterService(
+            self.vault, self.state, self.note_processor
+        )
