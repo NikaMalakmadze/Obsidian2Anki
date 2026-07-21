@@ -1,4 +1,3 @@
-from pathlib import Path
 import logging
 
 from obsidian2anki.core.note_processor import NoteProcessor
@@ -25,16 +24,6 @@ class MigrationService:
             self._migrate()
         finally:
             self._state.save()
-
-    def ensure_notes_format(self) -> None:
-        main_notes_folder_path: Path = (
-            Path(settings.LOCAL_VAULT) / settings.MAIN_NOTES_FOLDER
-        )
-
-        for file in main_notes_folder_path.iterdir():
-            if file.is_file():
-                self._vault.ensure_note_format(file)
-                logger.info("Formatting file with path: '%s'.", str(file.resolve()))
 
     def _migrate(self) -> None:
         main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
