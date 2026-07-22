@@ -1,3 +1,4 @@
+from importlib.metadata import version
 from argparse import ArgumentParser
 
 
@@ -7,8 +8,12 @@ def build_arg_parser() -> ArgumentParser:
         description="Sync Obsidian notes into Anki flashcards.",
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Show logging on terminal"
+        "-v", "--verbose", action="store_true", help="Increase output verbosity"
     )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {version('obsidian2anki')}"
+    )
+
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     for name, help_text in [
@@ -16,6 +21,7 @@ def build_arg_parser() -> ArgumentParser:
         ("process", "Process new notes from the inbox folder."),
         ("clear", "Delete all generated cards and clear state."),
         ("format-notes", "Convert existing notes to the required application format."),
+        ("doctor", "Check application health."),
     ]:
         subparsers.add_parser(name, help=help_text)
 
