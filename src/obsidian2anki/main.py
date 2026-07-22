@@ -1,4 +1,5 @@
 from typing import Callable
+import argcomplete
 import logging
 import sys
 
@@ -10,8 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> int:
-    setup_logger()
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args(argv)
+
+    setup_logger(
+        logging.DEBUG if args.verbose else logging.INFO, args.command != "doctor"
+    )
 
     app = build_app()
     commands: dict[str, Callable[[], None]] = {
@@ -19,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
         "process": app.process,
         "clear": app.clear,
         "format-notes": app.format_notes,
+        "doctor": app.doctor,
         "delete-card": lambda: app.delete_card(args.card_id),
         "delete-note": lambda: app.delete_note(args.note_id),
     }
