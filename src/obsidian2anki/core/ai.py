@@ -1,4 +1,4 @@
-from google.genai.errors import ClientError
+from google.genai.errors import APIError, ClientError
 from pathlib import Path
 from google import genai
 import logging
@@ -13,10 +13,10 @@ settings: Settings = get_settings()
 
 
 class AI:
-    def __init__(self) -> None:
-        self.client = genai.Client(api_key=settings.API_KEY)
+    def __init__(self, delay: int = 7) -> None:
+        self.delay: int = delay
         self.prompt: str = self._get_prompt()
-        self.delay: int = 7
+        self.client = genai.Client(api_key=settings.API_KEY)
 
     def generate_note_cards(self, note: VaultNote) -> list[Flashcard]:
         while True:
@@ -38,6 +38,20 @@ class AI:
 
         cards: FlashcardBatch = FlashcardBatch.model_validate_json(response.text)
         return cards.cards
+
+    @staticmethod
+    def validate_key(api_key: str) -> bool:
+        try:
+            client = genai.Client(api_key=api_key)
+            client.models.list()
+            logger.debug("API key is valid")
+            return True
+        except APIError:
+            logger.error("Authentication failed - invalid API key: '%s'", api_key)
+            return False
+        except Exception:
+            logger.exception("An unexpected error occurred")
+            return False
 
     @staticmethod
     def _get_prompt() -> str:
