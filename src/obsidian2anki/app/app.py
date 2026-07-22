@@ -5,6 +5,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class Doctor(Protocol):
+    def run(self) -> None: ...
+
+
 class NoteFormatterService(Protocol):
     def format_notes(self) -> None: ...
 
@@ -41,12 +45,14 @@ class Obsidian2Anki:
         clearing: ClearService,
         deleting: DeletingService,
         note_formatter: NoteFormatterService,
+        doctor: Doctor,
     ) -> None:
         self._migration = migration
         self._processing = processing
         self._clearing = clearing
         self._deleting = deleting
         self._note_formatter = note_formatter
+        self._doctor = doctor
 
     def migrate(self) -> None:
         """Initialize tracking and synchronize existing notes.
@@ -104,3 +110,6 @@ class Obsidian2Anki:
         logger.info("Starting note formatting.")
         self._note_formatter.format_notes()
         logger.info("Note formatting completed.")
+
+    def doctor(self) -> None:
+        self._doctor.run()

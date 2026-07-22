@@ -10,6 +10,8 @@ from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.core.ai import AI
 
+from obsidian2anki.app.doctor import Doctor
+
 
 class Dependencies:
     """
@@ -36,3 +38,5 @@ class Dependencies:
         self._note_formatting = NoteFormatterService(
             self.vault, self.state, self.note_processor
         )
+
+        self._doctor = Doctor(self.ai)
