@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 import json
 
 from obsidian2anki.config import Settings, get_settings, BASE_DIR
@@ -49,6 +50,13 @@ class StateManager:
         if not note:
             return
         return getattr(note, property)
+
+    def get_by_property(
+        self, search_by: StateNoteProperties, search_value: Any
+    ) -> StateNote | None:
+        for item in self._state.values():
+            if getattr(item, search_by, None) == search_value:
+                return item
 
     def delete_state_item(self, id: str) -> None:
         if id in self._state:

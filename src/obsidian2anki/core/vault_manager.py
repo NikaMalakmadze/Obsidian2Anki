@@ -82,6 +82,10 @@ class VaultManager:
 
         note_path.write_text("\n".join(new_content), encoding="utf-8")
 
+    def has_metadata(self, note_path: Path) -> bool:
+        note: Post = frontmatter.loads(note_path.read_text(encoding="utf-8"))
+        return len(note.keys()) >= 2
+
     def _move_to(
         self, note: VaultNote, note_file: Path, destination_folder: str
     ) -> None:
