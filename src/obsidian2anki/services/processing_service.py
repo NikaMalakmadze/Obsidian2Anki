@@ -19,13 +19,13 @@ class ProcessingService:
         self._state = state
         self._note_processor = note_processor
 
-    def process(self) -> None:
+    def process(self, dry_run: bool = False) -> None:
         try:
-            self._process()
+            self._process(dry_run)
         finally:
             self._state.save()
 
-    def _process(self) -> None:
+    def _process(self, dry_run: bool = False) -> None:
         notes: list[VaultNote] = self._vault.get_folder_notes(settings.INBOX_FOLDER)
         if not notes:
             logger.info("No notes found in '%s'.", settings.INBOX_FOLDER)
@@ -36,6 +36,10 @@ class ProcessingService:
             len(notes),
             settings.INBOX_FOLDER,
         )
+
+        if dry_run:
+            logger.debug("Ended processing on dry run.")
+            return
 
         for note in notes:
             if self._note_processor.has_right_tags(note):

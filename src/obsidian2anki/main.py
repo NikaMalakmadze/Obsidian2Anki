@@ -3,7 +3,7 @@ import argcomplete
 import logging
 import sys
 
-from obsidian2anki.utils.cli import build_arg_parser
+from obsidian2anki.cli.parser import build_arg_parser
 from obsidian2anki.utils.logger import setup_logger
 from obsidian2anki.app import build_app
 
@@ -16,7 +16,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     setup_logger(
-        logging.DEBUG if args.verbose else logging.INFO, args.command != "doctor"
+        level=(logging.INFO, logging.DEBUG)[args.verbose],
+        console=args.command != "doctor",
     )
 
     app = build_app()
@@ -31,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     try:
-        commands[args.command]()
+        commands[args.command](args.dry_run)
     except KeyboardInterrupt:
         logger.warning("Interrupted by user. Exiting.")
         return 130

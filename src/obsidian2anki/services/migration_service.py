@@ -19,13 +19,13 @@ class MigrationService:
         self._state = state
         self._note_processor = note_processor
 
-    def migrate(self) -> None:
+    def migrate(self, dry_run: bool = False) -> None:
         try:
-            self._migrate()
+            self._migrate(dry_run)
         finally:
             self._state.save()
 
-    def _migrate(self) -> None:
+    def _migrate(self, dry_run: bool = False) -> None:
         main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
             settings.MAIN_NOTES_FOLDER
         )
@@ -39,21 +39,28 @@ class MigrationService:
             settings.MAIN_NOTES_FOLDER,
         )
 
-        total_need_processing: int = sum(
-            1
+        notes_needing_processing: list[str] = [
+            note.title
             for note in main_folder_notes
             if not (
                 not self._note_processor.has_right_tags(note)
                 or not self._note_processor.needs_processing(note)
             )
-        )
+        ]
 
         logger.info(
             "Found %d notes requiring processing out of %d notes in '%s' folder.",
+            len(notes_needing_processing),
             len(main_folder_notes),
-            total_need_processing,
             settings.MAIN_NOTES_FOLDER,
         )
+
+        for note in notes_needing_processing:
+            logger.debug("Note needing processing: '%s'", note)
+
+        if dry_run:
+            logger.debug("Ended migration on dry run.")
+            return
 
         c: int = 0
 
@@ -71,6 +78,6 @@ class MigrationService:
             logger.info(
                 "Processed note %d/%d from '%s' folder.",
                 c,
-                total_need_processing,
+                len(notes_needing_processing),
                 settings.MAIN_NOTES_FOLDER,
             )

@@ -4,10 +4,8 @@ import logging
 from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.anki_manager import AnkiManager
-from obsidian2anki.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class DeletingService:
