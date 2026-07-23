@@ -7,6 +7,7 @@ import logging
 import sys
 
 from obsidian2anki.config import BASE_DIR, Settings, get_settings
+from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.core.ai import AI
 
 logger = logging.getLogger(__name__)
@@ -26,16 +27,17 @@ class Doctor:
 
     MINIMUM_PYTHON_VERSION = (3, 12)
 
-    def __init__(self, ai: AI, base_dir: Path = BASE_DIR) -> None:
+    def __init__(self, ai: AI, anki: AnkiManager, base_dir: Path = BASE_DIR) -> None:
         self._base_dir = base_dir
         self._console = Console()
         self._ai = ai
+        self._anki = anki
 
     def run(self) -> None:
         """Run all diagnostic checks."""
         results: dict[str, CheckResult] = {
             "Python Version": self._check_python_version(),
-            ".env Is File": self._check_env_file(),
+            ".env File": self._check_file(".env"),
             "Local Vault": self._check_folder(settings.LOCAL_VAULT, "Local Vault"),
             "Inbox Folder": self._check_vault_folder(settings.INBOX_FOLDER),
             "Main Notes Folder": self._check_vault_folder(settings.MAIN_NOTES_FOLDER),
@@ -43,6 +45,9 @@ class Doctor:
                 self._base_dir / settings.STATE_FOLDER, "State Folder"
             ),
             "API key": self._check_api_key(settings.API_KEY),
+            "Prompt File": self._check_file(settings.PROMPT_FILE),
+            "Anki Deck": self._check_anki_deck(),
+            "Anki": self._check_anki(),
         }
 
         markdown = self._construct_md(results)
@@ -67,14 +72,14 @@ class Doctor:
             )
         return CheckResult(True, f"Python {current} is supported.")
 
-    def _check_env_file(self) -> CheckResult:
-        env_file = self._base_dir / ".env"
-        is_file: bool = env_file.is_file()
+    def _check_file(self, file_name: str) -> CheckResult:
+        _file = self._base_dir / file_name
+        is_file: bool = _file.is_file()
         return CheckResult(
             is_file,
-            f"Environment file found at {env_file}"
+            f"{file_name} file found at {_file}"
             if is_file
-            else f"No .env file was found at {env_file}",
+            else f"No {file_name} file was found at {_file}",
         )
 
     def _check_vault_folder(self, folder_name: str) -> CheckResult:
@@ -82,6 +87,21 @@ class Doctor:
             return CheckResult(False, "Local vault does not exists")
 
         return self._check_folder(Path(settings.LOCAL_VAULT) / folder_name, folder_name)
+
+    def _check_anki_deck(self) -> CheckResult:
+        is_deck: bool = settings.DECK_NAME in self._anki.get_decks()
+        return CheckResult(
+            is_deck, "Anki deck exists" if is_deck else "Anki deck does not exists"
+        )
+
+    def _check_anki(self) -> CheckResult:
+        is_running: bool = self._anki.anki_running()
+        return CheckResult(
+            is_running,
+            "Anki is running"
+            if is_running
+            else "Anki is not running, please open it manually or check its url in .env file",
+        )
 
     def _check_api_key(self, api_key: str) -> CheckResult:
         is_valid: bool = self._ai.validate_key(api_key)

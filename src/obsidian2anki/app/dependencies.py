@@ -35,8 +35,6 @@ class Dependencies:
         )
         self._clear = ClearService(self.vault, self.state, self.note_processor)
         self._deleting = DeletingService(self.vault, self.state, self.anki)
-        self._note_formatting = NoteFormatterService(
-            self.vault, self.state, self.note_processor
-        )
+        self._note_formatting = NoteFormatterService(self.vault)
 
-        self._doctor = Doctor(self.ai)
+        self._doctor = Doctor(self.ai, self.anki)
