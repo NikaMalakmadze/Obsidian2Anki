@@ -19,6 +19,9 @@ class AnkiManager(AnkiConnecter):
     def get_tags(self) -> list[str]:
         return self.connect("getTags")
 
+    def get_notes(self) -> list[int]:
+        return self.connect("findNotes", query=f"deck:{self.deck_name}")
+
     def create_deck(self, name: str = "", **params: Unpack[DeckParamsDict]) -> None:
         validated = self._validate_params(DeckParams, params)
         if validated is None:

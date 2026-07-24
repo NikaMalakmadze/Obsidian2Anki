@@ -34,7 +34,7 @@ class AnkiConnecter:
             return None
 
     def anki_running(self) -> bool:
-        logger.info("Trying to connect with anki.")
+        logger.debug("Trying to connect with anki.")
         try:
             response = requests.post(
                 self.anki_url,
@@ -43,10 +43,10 @@ class AnkiConnecter:
             )
             response.raise_for_status()
             data = response.json()
-            logger.info("Anki responded successfuly.")
+            logger.debug("Anki responded successfuly.")
             return data.get("error") is None
         except (requests.RequestException, ValueError):
-            logger.info("Error when trying to connect with anki.")
+            logger.debug("Error when trying to connect with anki.")
             return False
 
     def open_anki(self) -> None:
