@@ -5,15 +5,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Doctor(Protocol):
-    def run(self) -> None: ...
-
-
 class DoctorService(Protocol):
     """Interface for running application diagnostic checks."""
 
     def run(self) -> None:
         """Run all application health checks."""
+        ...
+
+
+class StatsService(Protocol):
+    """Interface for getting stats about program"""
+
+    def stats(self) -> None:
+        """Get application stats"""
         ...
 
 
@@ -76,7 +80,8 @@ class Obsidian2Anki:
         clearing: ClearService,
         deleting: DeletingService,
         note_formatter: NoteFormatterService,
-        doctor: Doctor,
+        doctor: DoctorService,
+        stats: StatsService,
     ) -> None:
         self._migration = migration
         self._processing = processing
@@ -84,6 +89,7 @@ class Obsidian2Anki:
         self._deleting = deleting
         self._note_formatter = note_formatter
         self._doctor = doctor
+        self._stats = stats
 
     def migrate(self, dry_run: bool = False) -> None:
         """Initialize tracking and synchronize existing notes.
@@ -164,3 +170,6 @@ class Obsidian2Anki:
         logger.info("Starting application health check.")
         self._doctor.run()
         logger.info("Application health check completed.")
+
+    def stats(self) -> None:
+        self._stats.stats()

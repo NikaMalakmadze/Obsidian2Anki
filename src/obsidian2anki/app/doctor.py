@@ -1,8 +1,9 @@
-from rich.markdown import Markdown
 from dataclasses import dataclass
 from rich.console import Console
+from rich.table import Table
 from typing import Sequence
 from pathlib import Path
+from rich import box
 import logging
 import sys
 
@@ -50,9 +51,9 @@ class Doctor:
             "Anki": self._check_anki(),
         }
 
-        markdown = self._construct_md(results)
+        table = self._construct_table(results)
 
-        self._console.print(markdown)
+        self._console.print(table)
 
         return self._passed_checks(results.values())
 
@@ -128,12 +129,18 @@ class Doctor:
         return all(result.passed for result in results)
 
     @staticmethod
-    def _construct_md(results: dict[str, CheckResult]) -> Markdown:
-        results_list: list[str] = [
-            f" - {'✅' if result.passed else '❌ '} {name}: {result.message}"
-            for name, result in results.items()
-        ]
+    def _construct_table(results: dict[str, CheckResult]) -> Table:
+        table = Table(
+            title="[bold magenta]Doctor Results[/]",
+            box=box.ROUNDED,
+            highlight=True,
+        )
+        table.add_column("Status", justify="center", width=3)
+        table.add_column("Check", style="bold cyan", no_wrap=True)
+        table.add_column("Result")
 
-        markdown_content: str = f"# Doctor Results:\n{'\n'.join(results_list)}"
+        for name, result in results.items():
+            status: str = ("❌", "✅")[result.passed]
+            table.add_row(status, name, result.message)
 
-        return Markdown(markdown_content)
+        return table

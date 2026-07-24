@@ -11,4 +11,5 @@ def build_app() -> Obsidian2Anki:
         deps._deleting,
         deps._note_formatting,
         deps._doctor,
+        deps._stats,
     )
