@@ -1,8 +1,8 @@
-from typing import Callable
 import argcomplete
 import logging
 import sys
 
+from obsidian2anki.cli.mapping import generate_mapping
 from obsidian2anki.cli.parser import build_arg_parser
 from obsidian2anki.utils.logger import setup_logger
 from obsidian2anki.app import build_app
@@ -15,30 +15,23 @@ def main(argv: list[str] | None = None) -> int:
     argcomplete.autocomplete(parser)
     args = parser.parse_args(argv)
 
-    setup_logger(
-        level=(logging.INFO, logging.DEBUG)[args.verbose],
-        console=args.command != "doctor",
-    )
+    is_verbose: bool = (logging.INFO, logging.DEBUG)[args.verbose]
+    is_console: bool = args.command != "doctor"
+
+    setup_logger(is_verbose, is_console)
 
     app = build_app()
-    commands: dict[str, Callable[[], None]] = {
-        "migrate": app.migrate,
-        "process": app.process,
-        "clear": app.clear,
-        "format-notes": app.format_notes,
-        "doctor": app.doctor,
-        "delete-card": lambda: app.delete_card(args.card_id),
-        "delete-note": lambda: app.delete_note(args.note_id),
-    }
+    commands_mapping = generate_mapping(app, args)
 
     try:
-        commands[args.command](args.dry_run)
+        commands_mapping[args.command]()
     except KeyboardInterrupt:
-        logger.warning("Interrupted by user. Exiting.")
-        return 130
+        return logger.warning("Interrupted by user. Exiting.") or 130
     except Exception:
-        logger.exception("Unhandled error while running '%s'.", args.command)
-        return 1
+        return (
+            logger.exception("Unhandled error while running '%s'.", args.command) or 1
+        )
+
     return 0
 
 
