@@ -1,7 +1,7 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from rich.console import Console
 from rich.table import Table
-from typing import Sequence
 from pathlib import Path
 from rich import box
 import logging
@@ -29,10 +29,10 @@ class Doctor:
     MINIMUM_PYTHON_VERSION = (3, 12)
 
     def __init__(self, ai: AI, anki: AnkiManager, base_dir: Path = BASE_DIR) -> None:
-        self._base_dir = base_dir
-        self._console = Console()
         self._ai = ai
         self._anki = anki
+        self._console = Console()
+        self._base_dir = base_dir
 
     def run(self) -> None:
         """Run all diagnostic checks."""
@@ -55,7 +55,14 @@ class Doctor:
 
         self._console.print(table)
 
-        return self._passed_checks(results.values())
+        passed: bool = self._passed_checks(results.values())
+
+        if passed:
+            logger.info("All diagnostic checks passed. Your environment is ready.")
+        else:
+            logger.error(
+                "One or more diagnostic checks failed. Please review the results above."
+            )
 
     def _check_python_version(self) -> CheckResult:
         current_version = sys.version_info[:3]

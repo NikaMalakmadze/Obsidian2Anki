@@ -172,4 +172,11 @@ class Obsidian2Anki:
         logger.info("Application health check completed.")
 
     def stats(self) -> None:
+        """Display statistics about the current application state.
+
+        Collects and presents summary information about the managed notes,
+        generated Anki cards, and other relevant application metrics.
+        """
+        logger.info("Generating application statistics.")
         self._stats.stats()
+        logger.info("Application statistics generated.")
