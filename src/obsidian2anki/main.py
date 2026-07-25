@@ -5,6 +5,7 @@ import sys
 from obsidian2anki.cli.mapping import generate_mapping
 from obsidian2anki.cli.parser import build_arg_parser
 from obsidian2anki.utils.logger import setup_logger
+from obsidian2anki import IGNORE_CONSOLE
 from obsidian2anki.app import build_app
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     is_verbose: bool = (logging.INFO, logging.DEBUG)[args.verbose]
-    is_console: bool = args.command != "doctor"
+    is_console: bool = args.command not in IGNORE_CONSOLE
 
     setup_logger(is_verbose, is_console)
 
