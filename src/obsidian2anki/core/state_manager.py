@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -14,8 +14,13 @@ settings: Settings = get_settings()
 class StateManager:
     def __init__(self) -> None:
         self._state: dict[str, StateNote] = {}
+
         self.state_folder: Path = BASE_DIR / settings.STATE_FOLDER
+        self.state_folder.mkdir(parents=True, exist_ok=True)
+
         self.state_file: Path = self.state_folder / "state.json"
+        self.state_file.touch(exist_ok=True)
+
         self._temp_data: list[tuple[str, StateNote]] = []
         self._is_changed: bool = False
         self._load_state()
@@ -38,7 +43,7 @@ class StateManager:
         is_changed: bool = note.content_hash != content_hash or note.title != note_title
 
         if is_changed:
-            note.updated_at = datetime.now(timezone.utc).isoformat()
+            note.updated_at = datetime.now(UTC).isoformat()
 
         return is_changed
 
@@ -67,7 +72,7 @@ class StateManager:
     def prepare_for_state(self, note: NoteInfo) -> None:
         content_hash: str = sha256(note.vault_info.content.encode("utf-8")).hexdigest()
 
-        curr_datetime: datetime = datetime.now(timezone.utc)
+        curr_datetime: datetime = datetime.now(UTC)
 
         state_note: StateNote = StateNote(
             title=note.vault_info.title,
@@ -89,7 +94,7 @@ class StateManager:
             if card_id not in note_info.anki_note_ids:
                 continue
 
-            curr_datetime: str = datetime.now(timezone.utc).isoformat()
+            curr_datetime: str = datetime.now(UTC).isoformat()
             note_info.updated_at = curr_datetime
             note_info.anki_note_ids.remove(card_id)
             note_id = id
@@ -104,7 +109,7 @@ class StateManager:
         if not note:
             return False
 
-        curr_datetime: str = datetime.now(timezone.utc).isoformat()
+        curr_datetime: str = datetime.now(UTC).isoformat()
         note.updated_at = curr_datetime
         note.anki_note_ids = []
 

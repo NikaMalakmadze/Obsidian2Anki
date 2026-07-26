@@ -24,7 +24,7 @@ class AI:
                 response = self.client.models.generate_content(
                     model="gemini-3.1-flash-lite",
                     contents=self.prompt
-                    + f"\n\n{note.model_dump_json(indent=2, exclude=['id', 'path'])}",
+                    + f"\n\n{note.model_dump_json(indent=2, exclude=['id', 'path', 'anki_cards'])}",
                     config={
                         "response_mime_type": "application/json",
                         "response_schema": FlashcardBatch,
