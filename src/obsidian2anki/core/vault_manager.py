@@ -19,7 +19,7 @@ class VaultManager:
         notes: list[VaultNote] = [
             self._process_file(item)
             for item in (self.root / dir_name).iterdir()
-            if item.is_file()
+            if self._is_md(item)
         ]
         return notes
 
@@ -74,7 +74,7 @@ class VaultManager:
 
         new_content: list[str] = [
             "---",
-            f"id: {str(uuid.uuid4())}",
+            f"id: {uuid.uuid4()!s}",
             "tags:",
             *[f"  - {tag}" for tag in tags],
             "---",
@@ -96,7 +96,12 @@ class VaultManager:
             note_file.rename(destination_folder_path / note_file.name)
             note.path = note_path_str
 
-    def _process_file(self, file: Path) -> VaultNote:
+    @staticmethod
+    def _is_md(item: Path) -> bool:
+        return item.is_file() and item.suffix == ".md"
+
+    @staticmethod
+    def _process_file(file: Path) -> VaultNote:
         note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
 
         anki_cards_property: int | str | list = note.get("anki_cards", [])
