@@ -1,13 +1,16 @@
+from frontmatter import Post
 from pathlib import Path
+import frontmatter
+import logging
 import uuid
 
+from obsidian2anki.exceptions import ObsidianFolderDoesNotExists
 from obsidian2anki.config import get_settings, Settings
 from obsidian2anki.models import VaultNote
-from frontmatter import Post
-import frontmatter
 
 from obsidian2anki.utils.helpers import process_note_content
 
+logger = logging.getLogger(__name__)
 settings: Settings = get_settings()
 
 
@@ -16,12 +19,14 @@ class VaultManager:
         self.root: Path = Path(settings.LOCAL_VAULT)
 
     def get_folder_notes(self, dir_name: str) -> list[VaultNote]:
-        notes: list[VaultNote] = [
-            self._process_file(item)
-            for item in (self.root / dir_name).iterdir()
-            if self._is_md(item)
-        ]
-        return notes
+        folder_path: Path = self.root / dir_name
+        try:
+            notes: list[VaultNote] = self._get_notes_recursively(folder_path, True)
+            return notes
+        except ObsidianFolderDoesNotExists:
+            logger.exception(
+                "Folder with path: '%s' does not exists", folder_path.resolve()
+            )
 
     def remove_property(self, file: Path, property: str = "anki_cards") -> None:
         note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
@@ -95,6 +100,22 @@ class VaultManager:
         if note.path != note_path_str:
             note_file.rename(destination_folder_path / note_file.name)
             note.path = note_path_str
+
+    def _get_notes_recursively(
+        self, root: Path, first_run: bool = False
+    ) -> list[VaultNote]:
+        if first_run and not root.exists():
+            raise ObsidianFolderDoesNotExists(
+                f"Folder with path: {root.resolve()} does not exists"
+            )
+        notes: list[VaultNote] = []
+
+        for item in root.iterdir():
+            if item.is_dir():
+                notes.extend(self._get_notes_recursively(item))
+            elif self._is_md(item):
+                notes.append(self._process_file(item))
+        return notes
 
     @staticmethod
     def _is_md(item: Path) -> bool:
