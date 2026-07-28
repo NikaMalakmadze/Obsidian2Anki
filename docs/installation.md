@@ -856,7 +856,6 @@ The following constraints come directly from the current implementation:
 - All environment settings are mandatory.
 - `doctor` cannot diagnose an incomplete `.env` or missing prompt because those are loaded while building the application.
 - Inbox and main-note directories must already exist.
-- Folder scanning is immediate and non-recursive.
 - Anki's `Basic` note type must contain `NoteID`.
 - The destination deck should be created manually.
 - Anki should be opened manually before integration commands.
