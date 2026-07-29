@@ -7,6 +7,7 @@ import shutil
 import time
 
 from obsidian2anki.config import get_settings, Settings
+from obsidian2anki.exceptions import AnkiValidationException
 from obsidian2anki.utils.type import Action
 
 
@@ -29,7 +30,7 @@ class AnkiConnecter:
             result = response.json()
             self._validate_res(result)
             return result["result"]
-        except (requests.RequestException, ValueError):
+        except (requests.RequestException, AnkiValidationException):
             logger.exception("Could not connect to Anki. Is the Anki application open?")
             return None
 
@@ -57,8 +58,10 @@ class AnkiConnecter:
         subprocess.Popen([path])
         logger.info("Starting Anki...")
         for _ in range(20):
-            if not self.anki_running():
-                time.sleep(1)
+            if self.anki_running():
+                logger.debug("Anki Started Sucessfuly")
+                return
+            time.sleep(1)
 
         logger.error("Anki did not start in time.")
 
@@ -71,15 +74,16 @@ class AnkiConnecter:
             return validated
         except ValidationError:
             logger.exception("Invalid Params.")
-            return None
 
     @staticmethod
     def _validate_res(res: dict[str, Any]) -> None:
         if len(res) != 2:
-            raise ValueError("Response has an unexpected number of fields.")
+            raise AnkiValidationException(
+                "Response has an unexpected number of fields."
+            )
         if "error" not in res:
-            raise ValueError("Response is missing required error field.")
+            raise AnkiValidationException("Response is missing required error field.")
         if "result" not in res:
-            raise ValueError("Response is missing required result field.")
+            raise AnkiValidationException("Response is missing required result field.")
         if res["error"] is not None:
-            raise ValueError(res["error"])
+            raise AnkiValidationException(res["error"])

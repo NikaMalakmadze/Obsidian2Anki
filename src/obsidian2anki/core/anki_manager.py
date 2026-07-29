@@ -1,10 +1,10 @@
-from typing import Unpack
+import logging
 
-from obsidian2anki.utils.type import DeckParamsDict, DeckParams
 from obsidian2anki.utils.anki_connecter import AnkiConnecter
 from obsidian2anki.config import Settings, get_settings
 from obsidian2anki.models import Flashcard, AnkiCard
 
+logger = logging.getLogger(__name__)
 settings: Settings = get_settings()
 
 
@@ -22,23 +22,21 @@ class AnkiManager(AnkiConnecter):
     def get_notes(self) -> list[int]:
         return self.connect("findNotes", query=f"deck:{self.deck_name}")
 
-    def create_deck(self, name: str = "", **params: Unpack[DeckParamsDict]) -> None:
-        validated = self._validate_params(DeckParams, params)
-        if validated is None:
-            return
-        validated.deck = name if name else self.deck_name
-        v = self.connect("changeDeck", **validated.model_dump())
-        if not v:
-            print("Created Deck")
+    def create_deck(self, name: str = "") -> None:
+        deck_name: str = name if name else self.deck_name
+        v = self.connect("createDeck", deck=deck_name)
+        if v:
+            logger.info("Deck with name: '%s' created.", deck_name)
 
     def add_cards(
         self, note_id: str, cards: list[Flashcard], deck_name: str = ""
     ) -> list[int] | None:
-        if self.deck_name not in self.get_decks():
-            self.create_deck(self.deck_name)
+        user_decks: list[str] = self.get_decks()
 
-        if deck_name and deck_name not in self.get_decks():
-            self.create_deck(self.deck_name)
+        if self.deck_name not in user_decks or (
+            deck_name and deck_name not in user_decks
+        ):
+            self.create_deck(deck_name if deck_name else self.deck_name)
 
         anki_cards: list[AnkiCard] = [
             AnkiCard(
