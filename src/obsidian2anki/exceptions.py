@@ -4,3 +4,7 @@ class O2ABaseException(Exception):
 
 class ObsidianFolderDoesNotExists(O2ABaseException):
     pass
+
+
+class AnkiValidationException(O2ABaseException):
+    pass
