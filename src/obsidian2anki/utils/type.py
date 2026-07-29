@@ -1,9 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Literal, TypedDict
+from typing import Literal
 
 
 Action = Literal[
-    "deckNames", "changeDeck", "addNotes", "deleteNotes", "getTags", "findNotes"
+    "deckNames", "createDeck", "addNotes", "deleteNotes", "getTags", "findNotes"
 ]
 
 StateNoteProperties = Literal[
@@ -15,13 +14,3 @@ StateNoteProperties = Literal[
     "processed_at",
     "updated_at",
 ]
-
-
-class DeckParamsDict(TypedDict, total=False):
-    cards: list[str] = []
-    deck: str = ""
-
-
-class DeckParams(BaseModel):
-    cards: list[str] = Field(default_factory=list)
-    deck: str = ""
