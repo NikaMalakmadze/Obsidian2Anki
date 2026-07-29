@@ -43,6 +43,9 @@ class NoteFormatterService:
             return
 
         for file in main_notes_folder_path.iterdir():
-            if file.is_file():
+            resolved_path: Path = file.resolve()
+            if file.is_file() and not self._vault.has_metadata(file):
                 self._vault.ensure_note_format(file)
-                logger.info("Formatting file with path: '%s'.", str(file.resolve()))
+                logger.info("Formatting file with path: '%s'.", resolved_path)
+                continue
+            logger.info("Skipping formatted file with path: '%s'.", resolved_path)
