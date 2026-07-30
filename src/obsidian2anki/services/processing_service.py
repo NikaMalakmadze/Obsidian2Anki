@@ -3,12 +3,10 @@ import logging
 from obsidian2anki.core.note_processor import NoteProcessor
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.vault_manager import VaultManager
-from obsidian2anki.config import Settings, get_settings
 from obsidian2anki.models import VaultNote
 
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class ProcessingService:
@@ -26,15 +24,17 @@ class ProcessingService:
             self._state.save()
 
     def _process(self, dry_run: bool = False) -> None:
-        notes: list[VaultNote] = self._vault.get_folder_notes(settings.INBOX_FOLDER)
+        notes: list[VaultNote] = self._vault.get_folder_notes(
+            self._vault.settings.INBOX_FOLDER
+        )
         if not notes:
-            logger.info("No notes found in '%s'.", settings.INBOX_FOLDER)
+            logger.info("No notes found in '%s'.", self._vault.settings.INBOX_FOLDER)
             return
 
         logger.info(
             "Found %d notes in '%s'.",
             len(notes),
-            settings.INBOX_FOLDER,
+            self._vault.settings.INBOX_FOLDER,
         )
 
         if dry_run:

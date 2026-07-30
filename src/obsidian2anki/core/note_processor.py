@@ -9,7 +9,6 @@ from obsidian2anki.config import Settings, get_settings
 from obsidian2anki.core.ai import AI
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class NoteProcessor:
@@ -22,6 +21,8 @@ class NoteProcessor:
         state: StateManager,
         vault: VaultManager,
     ) -> None:
+        self.settings: Settings = get_settings()
+
         self._ai = ai
         self._anki = anki
         self._state = state
@@ -36,11 +37,11 @@ class NoteProcessor:
     def has_right_tags(self, note: VaultNote) -> bool:
         """Whether a note has right tags to be processed"""
         has_no_excluded_tags = not any(
-            tag in note.tags for tag in settings.EXCLUDE_TAGS
+            tag in note.tags for tag in self.settings.EXCLUDE_TAGS
         )
 
-        has_required_include_tag = not settings.INCLUDE_TAGS or any(
-            tag in note.tags for tag in settings.INCLUDE_TAGS
+        has_required_include_tag = not self.settings.INCLUDE_TAGS or any(
+            tag in note.tags for tag in self.settings.INCLUDE_TAGS
         )
 
         return has_no_excluded_tags and has_required_include_tag
@@ -74,14 +75,14 @@ class NoteProcessor:
 
             tries: int = 0
 
-            while not ids and tries < settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD:
+            while not ids and tries < self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD:
                 tries += 1
 
                 logger.warning(
                     "Failed to add cards for note '%s'. Retrying (%d/%d).",
                     note.id,
                     tries,
-                    settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
+                    self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
                 )
 
                 flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
@@ -98,7 +99,7 @@ class NoteProcessor:
                 logger.error(
                     "Failed to add cards for note '%s' after %d attempts.",
                     note.id,
-                    settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
+                    self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
                 )
                 return False
 

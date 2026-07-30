@@ -8,14 +8,14 @@ from obsidian2anki.config import Settings, get_settings, BASE_DIR
 from obsidian2anki.utils.type import StateNoteProperties
 from obsidian2anki.models import StateNote, NoteInfo
 
-settings: Settings = get_settings()
-
 
 class StateManager:
     def __init__(self) -> None:
+        self.settings: Settings = get_settings()
+
         self._state: dict[str, StateNote] = {}
 
-        self.state_folder: Path = BASE_DIR / settings.STATE_FOLDER
+        self.state_folder: Path = BASE_DIR / self.settings.STATE_FOLDER
         self.state_folder.mkdir(parents=True, exist_ok=True)
 
         self.state_file: Path = self.state_folder / "state.json"

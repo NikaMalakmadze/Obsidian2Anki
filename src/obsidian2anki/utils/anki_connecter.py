@@ -6,18 +6,18 @@ import logging
 import shutil
 import time
 
-from obsidian2anki.config import get_settings, Settings
 from obsidian2anki.exceptions import AnkiValidationException
+from obsidian2anki.config import get_settings, Settings
 from obsidian2anki.utils.type import Action
 
 
-settings: Settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
 class AnkiConnecter:
     def __init__(self) -> None:
-        self.anki_url = settings.ANKI_URL
+        self.settings: Settings = get_settings()
+        self.anki_url = self.settings.ANKI_URL
 
     def connect(self, action: Action, **params) -> Any:
         if not self.anki_running():

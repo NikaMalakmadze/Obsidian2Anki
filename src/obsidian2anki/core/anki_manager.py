@@ -1,17 +1,15 @@
 import logging
 
 from obsidian2anki.utils.anki_connecter import AnkiConnecter
-from obsidian2anki.config import Settings, get_settings
 from obsidian2anki.models import Flashcard, AnkiCard
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class AnkiManager(AnkiConnecter):
     def __init__(self) -> None:
         super().__init__()
-        self.deck_name: str = settings.DECK_NAME
+        self.deck_name: str = self.settings.DECK_NAME
 
     def get_decks(self) -> list[str]:
         return self.connect("deckNames")

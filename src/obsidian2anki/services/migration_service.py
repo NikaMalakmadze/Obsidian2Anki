@@ -3,12 +3,10 @@ import logging
 from obsidian2anki.core.note_processor import NoteProcessor
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.vault_manager import VaultManager
-from obsidian2anki.config import Settings, get_settings
 from obsidian2anki.models import VaultNote
 
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class MigrationService:
@@ -27,16 +25,18 @@ class MigrationService:
 
     def _migrate(self, dry_run: bool = False) -> None:
         main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
-            settings.MAIN_NOTES_FOLDER
+            self._vault.settings.MAIN_NOTES_FOLDER
         )
         if not main_folder_notes:
-            logger.info("No notes found in '%s'.", settings.MAIN_NOTES_FOLDER)
+            logger.info(
+                "No notes found in '%s'.", self._vault.settings.MAIN_NOTES_FOLDER
+            )
             return
 
         logger.info(
             "Found %d notes in '%s'.",
             len(main_folder_notes),
-            settings.MAIN_NOTES_FOLDER,
+            self._vault.settings.MAIN_NOTES_FOLDER,
         )
 
         notes_needing_processing: list[str] = [
@@ -52,7 +52,7 @@ class MigrationService:
             "Found %d notes requiring processing out of %d notes in '%s' folder.",
             len(notes_needing_processing),
             len(main_folder_notes),
-            settings.MAIN_NOTES_FOLDER,
+            self._vault.settings.MAIN_NOTES_FOLDER,
         )
 
         for note in notes_needing_processing:
@@ -79,5 +79,5 @@ class MigrationService:
                 "Processed note %d/%d from '%s' folder.",
                 c,
                 len(notes_needing_processing),
-                settings.MAIN_NOTES_FOLDER,
+                self._vault.settings.MAIN_NOTES_FOLDER,
             )

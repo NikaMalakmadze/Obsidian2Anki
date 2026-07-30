@@ -9,14 +9,15 @@ from obsidian2anki.config import get_settings, Settings, BASE_DIR
 
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class AI:
     def __init__(self, delay: int = 7) -> None:
+        self.settings: Settings = get_settings()
+
         self.delay: int = delay
         self.prompt: str = self._get_prompt()
-        self.client = genai.Client(api_key=settings.API_KEY)
+        self.client = genai.Client(api_key=self.settings.API_KEY)
 
     def generate_note_cards(self, note: VaultNote) -> list[Flashcard]:
         while True:
@@ -39,6 +40,10 @@ class AI:
         cards: FlashcardBatch = FlashcardBatch.model_validate_json(response.text)
         return cards.cards
 
+    def _get_prompt(self) -> str:
+        prompt_file: Path = BASE_DIR / self.settings.PROMPT_FILE
+        return prompt_file.read_text(encoding="utf-8")
+
     @staticmethod
     def validate_key(api_key: str) -> bool:
         try:
@@ -52,8 +57,3 @@ class AI:
         except Exception:
             logger.exception("An unexpected error occurred")
             return False
-
-    @staticmethod
-    def _get_prompt() -> str:
-        prompt_file: Path = BASE_DIR / settings.PROMPT_FILE
-        return prompt_file.read_text(encoding="utf-8")

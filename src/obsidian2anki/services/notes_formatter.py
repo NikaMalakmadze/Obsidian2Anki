@@ -2,11 +2,9 @@ from pathlib import Path
 import logging
 
 from obsidian2anki.core.vault_manager import VaultManager
-from obsidian2anki.config import Settings, get_settings
 
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class NoteFormatterService:
@@ -15,7 +13,8 @@ class NoteFormatterService:
 
     def ensure_notes_format(self, dry_run: bool = False) -> None:
         main_notes_folder_path: Path = (
-            Path(settings.LOCAL_VAULT) / settings.MAIN_NOTES_FOLDER
+            Path(self._vault.settings.LOCAL_VAULT)
+            / self._vault.settings.MAIN_NOTES_FOLDER
         )
 
         legacy_notes: list[str] = [
@@ -32,7 +31,7 @@ class NoteFormatterService:
             "Found %d notes requiring formatting out of %d notes in '%s' folder.",
             len(legacy_notes),
             total_notes,
-            settings.MAIN_NOTES_FOLDER,
+            self._vault.settings.MAIN_NOTES_FOLDER,
         )
 
         for note in legacy_notes:

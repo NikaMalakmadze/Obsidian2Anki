@@ -5,19 +5,20 @@ import logging
 import uuid
 
 from obsidian2anki.exceptions import ObsidianFolderDoesNotExists
+from obsidian2anki.utils.helpers import process_note_content
 from obsidian2anki import VAULT_NOTE_NECESSARY_PROPERTIES
 from obsidian2anki.config import get_settings, Settings
 from obsidian2anki.models import VaultNote
 
-from obsidian2anki.utils.helpers import process_note_content
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 class VaultManager:
     def __init__(self) -> None:
-        self.root: Path = Path(settings.LOCAL_VAULT)
+        self.settings: Settings = get_settings()
+
+        self.root: Path = Path(self.settings.LOCAL_VAULT)
         self.note_properties: tuple[str, ...] = VAULT_NOTE_NECESSARY_PROPERTIES
 
     def get_folder_notes(self, dir_name: str) -> list[VaultNote]:
@@ -72,7 +73,7 @@ class VaultManager:
 
         file.write_text("\n".join(lines), encoding="utf-8")
 
-        self._move_to(note, file, settings.MAIN_NOTES_FOLDER)
+        self._move_to(note, file, self.settings.MAIN_NOTES_FOLDER)
 
     def ensure_note_format(self, note_path: Path) -> None:
         lines: list[str] = note_path.read_text(encoding="utf-8").splitlines()
@@ -99,7 +100,9 @@ class VaultManager:
     def _move_to(
         self, note: VaultNote, note_file: Path, destination_folder: str
     ) -> None:
-        destination_folder_path: Path = Path(settings.LOCAL_VAULT) / destination_folder
+        destination_folder_path: Path = (
+            Path(self.settings.LOCAL_VAULT) / destination_folder
+        )
         note_path_str: str = str((destination_folder_path / note_file.name).resolve())
 
         if note.path != note_path_str:

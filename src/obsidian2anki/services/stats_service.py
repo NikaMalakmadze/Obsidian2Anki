@@ -7,10 +7,8 @@ import logging
 
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.anki_manager import AnkiManager
-from obsidian2anki.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 @dataclass
@@ -23,14 +21,14 @@ class Statistic:
 
 class StatsService:
     def __init__(self, state: StateManager, anki: AnkiManager) -> None:
-        self._state = state
         self._anki = anki
-        self._local_vault: Path = Path(settings.LOCAL_VAULT)
+        self._state = state
         self._console = Console()
+        self._local_vault: Path = Path(self._state.settings.LOCAL_VAULT)
 
     def stats(self) -> None:
-        inbox_folder_notes = self._folder_notes(settings.INBOX_FOLDER)
-        main_folder_notes = self._folder_notes(settings.MAIN_NOTES_FOLDER)
+        inbox_folder_notes = self._folder_notes(self._state.settings.INBOX_FOLDER)
+        main_folder_notes = self._folder_notes(self._state.settings.MAIN_NOTES_FOLDER)
         processed_notes = self._processed_notes()
         unprocessed_notes = self._unprocessed_notes()
         cards_count = self._anki_cards()
@@ -60,7 +58,9 @@ class StatsService:
         return Statistic("Processed notes", len(processed_notes))
 
     def _unprocessed_notes(self) -> Statistic:
-        main_notes_folder_path: Path = self._local_vault / settings.MAIN_NOTES_FOLDER
+        main_notes_folder_path: Path = (
+            self._local_vault / self._state.settings.MAIN_NOTES_FOLDER
+        )
 
         unprocessed_notes: list[str] = [
             file.name.split(".")[0]
@@ -77,7 +77,7 @@ class StatsService:
             "Found %d unprocessed notes out of %d processed notes in '%s' folder.",
             len(unprocessed_notes),
             total_notes,
-            settings.MAIN_NOTES_FOLDER,
+            self._state.settings.MAIN_NOTES_FOLDER,
         )
 
         for unprocessed_note in unprocessed_notes:
@@ -104,7 +104,11 @@ class StatsService:
     def _anki_cards(self) -> Statistic:
         cards = self._anki.get_notes()
 
-        logger.info("Found %d anki cards in deck: '%s'", len(cards), settings.DECK_NAME)
+        logger.info(
+            "Found %d anki cards in deck: '%s'",
+            len(cards),
+            self._state.settings.DECK_NAME,
+        )
 
         return Statistic("Generated Cards", len(cards))
 
