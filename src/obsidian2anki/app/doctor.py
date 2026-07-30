@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from rich.console import Console
+from pydantic import ValidationError
+from pydantic_core import ErrorDetails
 from rich.table import Table
 from pathlib import Path
 from rich import box
@@ -12,7 +13,6 @@ from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.core.ai import AI
 
 logger = logging.getLogger(__name__)
-settings: Settings = get_settings()
 
 
 @dataclass
@@ -31,38 +31,41 @@ class Doctor:
     def __init__(self, ai: AI, anki: AnkiManager, base_dir: Path = BASE_DIR) -> None:
         self._ai = ai
         self._anki = anki
-        self._console = Console()
         self._base_dir = base_dir
 
     def run(self) -> None:
         """Run all diagnostic checks."""
-        results: dict[str, CheckResult] = {
-            "Python Version": self._check_python_version(),
-            ".env File": self._check_file(".env"),
-            "Local Vault": self._check_folder(settings.LOCAL_VAULT, "Local Vault"),
-            "Inbox Folder": self._check_vault_folder(settings.INBOX_FOLDER),
-            "Main Notes Folder": self._check_vault_folder(settings.MAIN_NOTES_FOLDER),
-            "State Folder": self._check_folder(
-                self._base_dir / settings.STATE_FOLDER, "State Folder"
-            ),
-            "API key": self._check_api_key(settings.API_KEY),
-            "Prompt File": self._check_file(settings.PROMPT_FILE),
-            "Anki Deck": self._check_anki_deck(),
-            "Anki": self._check_anki(),
-        }
+        self._check_env()
 
-        table = self._construct_table(results)
+        # results: dict[str, CheckResult] = {
+        #     "Python Version": self._check_python_version(),
+        #     ".env File": self._check_file(".env"),
+        #     "Local Vault": self._check_folder(settings.LOCAL_VAULT, "Local Vault"),
+        #     "Inbox Folder": self._check_vault_folder(settings.INBOX_FOLDER),
+        #     "Main Notes Folder": self._check_vault_folder(settings.MAIN_NOTES_FOLDER),
+        #     "State Folder": self._check_folder(
+        #         self._base_dir / settings.STATE_FOLDER, "State Folder"
+        #     ),
+        #     "API key": self._check_api_key(settings.API_KEY),
+        #     "Prompt File": self._check_file(settings.PROMPT_FILE),
+        #     "Anki Deck": self._check_anki_deck(),
+        #     "Anki": self._check_anki(),
+        # }
 
-        self._console.print(table)
+        # console = Console()
 
-        passed: bool = self._passed_checks(results.values())
+        # table = self._construct_table(results)
 
-        if passed:
-            logger.info("All diagnostic checks passed. Your environment is ready.")
-        else:
-            logger.error(
-                "One or more diagnostic checks failed. Please review the results above."
-            )
+        # console.print(table)
+
+        # passed: bool = self._passed_checks(results.values())
+
+        # if passed:
+        #     logger.info("All diagnostic checks passed. Your environment is ready.")
+        # else:
+        #     logger.error(
+        #         "One or more diagnostic checks failed. Please review the results above."
+        #     )
 
     def _check_python_version(self) -> CheckResult:
         current_version = sys.version_info[:3]
@@ -79,6 +82,20 @@ class Doctor:
                 ),
             )
         return CheckResult(True, f"Python {current} is supported.")
+
+    def _check_env(self) -> CheckResult:
+        try:
+            settings: Settings = get_settings()
+            print(settings)
+        except ValidationError as e:
+            errors: list[ErrorDetails] = e.errors(include_input=True)
+
+            for error in errors:
+                print(error)
+
+        # env_file = self._base_dir / ".env"
+        # lines: list[str] = env_file.read_text("utf-8").splitlines()
+        # print(lines)
 
     def _check_file(self, file_name: str) -> CheckResult:
         _file = self._base_dir / file_name
