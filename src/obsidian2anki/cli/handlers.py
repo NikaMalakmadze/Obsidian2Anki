@@ -1,10 +1,9 @@
 from collections.abc import Callable
-from typing import TypeAlias
 
-NoteId: TypeAlias = str
-CardId: TypeAlias = int
+type NoteId = str
+type CardId = int
 
-ArgTypes: TypeAlias = NoteId | CardId
+type ArgTypes = NoteId | CardId
 
-CommandHandler: TypeAlias = Callable[[], None]
-ArgCommandHandler: TypeAlias = Callable[[NoteId | CardId], None]
+type CommandHandler = Callable[[], None]
+type ArgCommandHandler = Callable[[NoteId | CardId], None]

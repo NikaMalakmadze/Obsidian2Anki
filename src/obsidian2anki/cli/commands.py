@@ -22,6 +22,13 @@ class ArgCommandDefinition(BaseCommandDefinition):
     handler: NoteId | CardId
 
 
+DOCTOR_COMMAND: CommandDefinition = CommandDefinition(
+    name="doctor",
+    help="Check application health.",
+    supports_dry_run=False,
+    func_name="run",
+)
+
 COMMANDS: tuple[CommandDefinition, ...] = (
     CommandDefinition(
         name="migrate",
@@ -42,12 +49,6 @@ COMMANDS: tuple[CommandDefinition, ...] = (
         name="format-notes",
         help="Convert existing notes to the required application format.",
         func_name="format_notes",
-    ),
-    CommandDefinition(
-        name="doctor",
-        help="Check application health.",
-        supports_dry_run=False,
-        func_name="doctor",
     ),
     CommandDefinition(
         name="stats",
@@ -75,3 +76,5 @@ ARG_COMMANDS: tuple[ArgCommandDefinition, ...] = (
         func_name="delete_note",
     ),
 )
+
+APP_COMMANDS = (*COMMANDS, *ARG_COMMANDS)
