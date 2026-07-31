@@ -13,10 +13,10 @@ class Settings(BaseSettings):
     API_KEY: str
     PROMPT_FILE: str
 
-    INCLUDE_TAGS: list[str]
-    EXCLUDE_TAGS: list[str]
+    INCLUDE_TAGS: set[str] = set()
+    EXCLUDE_TAGS: set[str] = set()
 
-    ANKI_URL: str
+    ANKI_URL: str = "http://localhost:8765"
     DECK_NAME: str
 
     LOCAL_VAULT: str
