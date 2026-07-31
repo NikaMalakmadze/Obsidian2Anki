@@ -1,0 +1,154 @@
+from collections.abc import Sequence
+from rich.console import Console
+from rich.table import Table
+from pathlib import Path
+from rich import box
+import logging
+import sys
+
+
+from obsidian2anki.diagnostics.models import CheckResult
+from obsidian2anki.core.anki_manager import AnkiManager
+from obsidian2anki.config import BASE_DIR, Settings
+from obsidian2anki.core.ai import AI
+
+
+logger = logging.getLogger(__name__)
+
+
+class RuntimeCheker:
+    MINIMUM_PYTHON_VERSION = (3, 12)
+
+    def __init__(
+        self, settings: Settings, anki: AnkiManager, ai: AI, base_dir: Path = BASE_DIR
+    ) -> None:
+        self._base_dir = base_dir
+        self._settings = settings
+        self._anki = anki
+        self._ai = ai
+
+    def run(self) -> None:
+        """Run all diagnostic checks."""
+        results: dict[str, CheckResult] = {
+            "Python Version": self._check_python_version(),
+            ".env File": self._check_file(".env"),
+            "Local Vault": self._check_folder(
+                self._settings.LOCAL_VAULT, "Local Vault"
+            ),
+            "Inbox Folder": self._check_vault_folder(self._settings.INBOX_FOLDER),
+            "Main Notes Folder": self._check_vault_folder(
+                self._settings.MAIN_NOTES_FOLDER
+            ),
+            "State Folder": self._check_folder(
+                self._base_dir / self._settings.STATE_FOLDER, "State Folder"
+            ),
+            "API key": self._check_api_key(self._settings.API_KEY),
+            "Prompt File": self._check_file(self._settings.PROMPT_FILE),
+            "Anki Deck": self._check_anki_deck(),
+            "Anki": self._check_anki(),
+        }
+
+        console = Console()
+
+        table = self._construct_table(results)
+
+        console.print(table)
+
+        passed: bool = self._passed_checks(results.values())
+
+        if passed:
+            logger.info("All diagnostic checks passed. Your environment is ready.")
+        else:
+            logger.error(
+                "One or more diagnostic checks failed. Please review the results above."
+            )
+
+    def _check_python_version(self) -> CheckResult:
+        current_version = sys.version_info[:3]
+
+        current = ".".join(map(str, current_version))
+
+        if current_version < self.MINIMUM_PYTHON_VERSION:
+            required = ".".join(map(str, self.MINIMUM_PYTHON_VERSION))
+            return CheckResult(
+                passed=False,
+                message=(
+                    f"Python {current} detected; "
+                    f"Python {required} or newer is required."
+                ),
+            )
+        return CheckResult(True, f"Python {current} is supported.")
+
+    def _check_file(self, file_name: str) -> CheckResult:
+        _file = self._base_dir / file_name
+        is_file: bool = _file.is_file()
+        return CheckResult(
+            is_file,
+            f"{file_name} file found at {_file}"
+            if is_file
+            else f"No {file_name} file was found at {_file}",
+        )
+
+    def _check_vault_folder(self, folder_name: str) -> CheckResult:
+        if not self._check_folder(self._settings.LOCAL_VAULT, "Local Vault").passed:
+            return CheckResult(False, "Local vault does not exists")
+
+        return self._check_folder(
+            Path(self._settings.LOCAL_VAULT) / folder_name, folder_name
+        )
+
+    def _check_anki_deck(self) -> CheckResult:
+        is_deck: bool = self._settings.DECK_NAME in self._anki.get_decks()
+        return CheckResult(
+            is_deck, "Anki deck exists" if is_deck else "Anki deck does not exists"
+        )
+
+    def _check_anki(self) -> CheckResult:
+        is_running: bool = self._anki.anki_running()
+        return CheckResult(
+            is_running,
+            "Anki is running"
+            if is_running
+            else "Anki is not running, please open it manually or check its url in .env file",
+        )
+
+    def _check_api_key(self, api_key: str) -> CheckResult:
+        is_valid: bool = self._ai.validate_key(api_key)
+        return CheckResult(
+            is_valid, "API key is correct" if is_valid else "API key is incorrect"
+        )
+
+    @staticmethod
+    def _check_folder(folder_path: str, folder_name: str) -> CheckResult:
+        is_str_path: bool = isinstance(folder_path, str)
+        if is_str_path and not folder_path:
+            return CheckResult(False, "{folder_name} is not configured.")
+
+        path = Path(folder_path) if is_str_path else folder_path
+        if not path.exists():
+            return CheckResult(False, f"{folder_name} does not exist: {path}")
+        if not path.is_dir():
+            return CheckResult(False, f"{folder_name} is not a directory: {path}")
+
+        return CheckResult(True, f"{folder_name} found: {path}")
+
+    @staticmethod
+    def _passed_checks(results: Sequence[CheckResult]) -> bool:
+        return all(result.passed for result in results)
+
+    @staticmethod
+    def _construct_table(results: dict[str, CheckResult]) -> Table:
+        table = Table(
+            title="[bold magenta]Doctor Results[/]",
+            box=box.ROUNDED,
+            highlight=True,
+        )
+        table.add_column("Status", justify="center", width=3)
+        table.add_column("Check", style="bold cyan", no_wrap=True)
+        table.add_column("Result")
+
+        for name, result in results.items():
+            status: str = ("❌", "✅")[result.passed]
+            table.add_row(status, name, result.message)
+
+        return table
