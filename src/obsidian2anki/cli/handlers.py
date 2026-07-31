@@ -1,9 +1,10 @@
+from typing import NewType
 from collections.abc import Callable
 
-type NoteId = str
-type CardId = int
+NoteId = NewType("NoteId", str)
+CardId = NewType("CardId", int)
 
 type ArgTypes = NoteId | CardId
 
 type CommandHandler = Callable[[], None]
-type ArgCommandHandler = Callable[[NoteId | CardId], None]
+type ArgCommandHandler = Callable[[ArgTypes], None]

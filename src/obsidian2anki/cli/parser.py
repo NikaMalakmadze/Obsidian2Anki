@@ -1,38 +1,52 @@
 from importlib.metadata import version
 from argparse import ArgumentParser
 
-from obsidian2anki.cli.commands import COMMANDS, ARG_COMMANDS
+from obsidian2anki.cli.commands import ArgCommandDefinition, CommandDefinition
 
 
-def build_arg_parser() -> ArgumentParser:
-    parser = ArgumentParser(
-        prog="obsidian2anki",
-        description="Sync Obsidian notes into Anki flashcards.",
-    )
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Increase output verbosity"
-    )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {version('obsidian2anki')}"
-    )
+class ArgParser:
+    def __init__(self) -> None:
+        self._parser = ArgumentParser(
+            prog="obsidian2anki",
+            description="Sync Obsidian notes into Anki flashcards.",
+        )
+        self._commands_parser = self._parser.add_subparsers(
+            dest="command", required=True
+        )
+        self._init_base_args()
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    @property
+    def parser(self) -> ArgumentParser:
+        return self._parser
 
-    for command in COMMANDS:
-        command_parser = subparsers.add_parser(command.name, help=command.help)
-        if command.supports_dry_run:
+    def add_command(self, command: CommandDefinition | ArgCommandDefinition) -> None:
+        command_parser = self._commands_parser.add_parser(
+            command.name, help=command.help
+        )
+
+        if isinstance(command, ArgCommandDefinition):
             command_parser.add_argument(
-                "--dry-run",
-                action="store_true",
-                help="Show what would be changed without making any changes.",
+                command.arg_name, help=command.arg_help, type=command.handler
             )
+            return
 
-    for arg_command in ARG_COMMANDS:
-        arg_command_parser = subparsers.add_parser(
-            arg_command.name, help=arg_command.help
+        if command.supports_dry_run:
+            self._add_dry_run(command_parser)
+
+    def _init_base_args(self) -> None:
+        self._parser.add_argument(
+            "-v", "--verbose", action="store_true", help="Increase output verbosity"
         )
-        arg_command_parser.add_argument(
-            arg_command.arg_name, help=arg_command.arg_help, type=arg_command.handler
+        self._parser.add_argument(
+            "--version",
+            action="version",
+            version=f"%(prog)s {version('obsidian2anki')}",
         )
 
-    return parser
+    @staticmethod
+    def _add_dry_run(command_parser: ArgumentParser) -> None:
+        command_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show what would be changed without making any changes.",
+        )
