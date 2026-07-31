@@ -11,8 +11,6 @@ from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.anki_manager import AnkiManager
 from obsidian2anki.core.ai import AI
 
-from obsidian2anki.app.doctor import Doctor
-
 
 class Dependencies:
     """
@@ -38,5 +36,3 @@ class Dependencies:
         self._deleting = DeletingService(self.vault, self.state, self.anki)
         self._note_formatting = NoteFormatterService(self.vault)
         self._stats = StatsService(self.state, self.anki)
-
-        self._doctor = Doctor(self.ai, self.anki)

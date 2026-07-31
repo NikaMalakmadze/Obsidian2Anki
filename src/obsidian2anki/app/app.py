@@ -161,16 +161,6 @@ class Obsidian2Anki:
         self._deleting.delete_note(note_id)
         logger.info("Ended deleting card note id`%s`.", note_id)
 
-    def doctor(self) -> None:
-        """Run diagnostic checks on the application environment.
-
-        Verifies that the application configuration and external dependencies
-        are correctly set up and reports any detected issues.
-        """
-        logger.info("Starting application health check.")
-        self._doctor.run()
-        logger.info("Application health check completed.")
-
     def stats(self) -> None:
         """Display statistics about the current application state.
 
