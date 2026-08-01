@@ -80,7 +80,6 @@ class Obsidian2Anki:
         clearing: ClearService,
         deleting: DeletingService,
         note_formatter: NoteFormatterService,
-        doctor: DoctorService,
         stats: StatsService,
     ) -> None:
         self._migration = migration
@@ -88,7 +87,6 @@ class Obsidian2Anki:
         self._clearing = clearing
         self._deleting = deleting
         self._note_formatter = note_formatter
-        self._doctor = doctor
         self._stats = stats
 
     def migrate(self, dry_run: bool = False) -> None:
