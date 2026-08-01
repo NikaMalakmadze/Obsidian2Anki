@@ -55,7 +55,11 @@ class AnkiConnecter:
         if path is None:
             logger.error("Could not find 'anki' executable.")
             return
-        subprocess.Popen([path])
+        subprocess.Popen(
+            [path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         logger.info("Starting Anki...")
         for _ in range(20):
             if self.anki_running():
