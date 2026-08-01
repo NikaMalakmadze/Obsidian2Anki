@@ -858,7 +858,6 @@ The following constraints come directly from the current implementation:
 - Inbox and main-note directories must already exist.
 - Anki's `Basic` note type must contain `NoteID`.
 - The destination deck should be created manually.
-- Anki should be opened manually before integration commands.
 - The Gemini model is fixed to `gemini-3.1-flash-lite` in source code.
 - `format-notes` assumes a legacy note whose first line contains space-separated `#tags`; it rewrites note files and should be preceded by a backup and `--dry-run`.
 
