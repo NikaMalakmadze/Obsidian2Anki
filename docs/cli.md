@@ -1,18 +1,13 @@
 # CLI Reference
 
-This guide documents the command-line interface for **Obsidian2Anki 0.1.0**. It explains global options, every available subcommand, argument validation, dry-run behavior, logging, exit statuses, command side effects, and current implementation constraints.
+This guide documents the command-line behavior implemented in the current repository snapshot.
 
-For initial setup, see [Installation](installation.md). For environment variables, see [Configuration](configuration.md). For the complete note lifecycle, see [Workflow](workflow.md). For internal command dispatch and dependency wiring, see [Architecture](architecture.md).
-
-> [!CAUTION]
-> Several commands modify multiple systems in one run. Depending on the command, Obsidian2Anki can generate or delete Anki notes, rewrite YAML frontmatter, move Markdown files, and update or clear `state.json`. Back up the Obsidian vault and Anki collection before the first real run and before destructive bulk operations.
+> [!WARNING]
+> Several commands modify Obsidian frontmatter, move source files, delete Anki notes, and rewrite local state. Back up the vault and Anki collection before the first real migration, formatting run, or bulk deletion.
 
 ## Contents
 
 - [Command Structure](#command-structure)
-- [Entry Point](#entry-point)
-- [Startup Requirements](#startup-requirements)
-- [Global Help](#global-help)
 - [Global Options](#global-options)
 - [Command Summary](#command-summary)
 - [`process`](#process)
@@ -23,323 +18,147 @@ For initial setup, see [Installation](installation.md). For environment variable
 - [`delete-note`](#delete-note)
 - [`doctor`](#doctor)
 - [`stats`](#stats)
-- [Dry-Run Behavior](#dry-run-behavior)
-- [Verbose Output and Logging](#verbose-output-and-logging)
-- [Terminal Output](#terminal-output)
-- [Argument Validation](#argument-validation)
+- [Dry-Run Matrix](#dry-run-matrix)
+- [Logging and Terminal Output](#logging-and-terminal-output)
 - [Exit Statuses](#exit-statuses)
 - [Shell Completion](#shell-completion)
-- [Recommended Command Sequences](#recommended-command-sequences)
-- [Common CLI Mistakes](#common-cli-mistakes)
+- [Recommended Sequences](#recommended-sequences)
 - [Troubleshooting](#troubleshooting)
-- [Current CLI Constraints](#current-cli-constraints)
 
 ## Command Structure
 
-The general command format is:
+The package installs one console entry point:
+
+```bash
+obsidian2anki <command> [command options]
+```
+
+The parser requires a subcommand.
+
+Implemented commands:
 
 ```text
-obsidian2anki [GLOBAL_OPTIONS] COMMAND [COMMAND_OPTIONS] [ARGUMENTS]
+migrate
+process
+clear
+format-notes
+stats
+delete-card
+delete-note
+doctor
 ```
 
-Examples:
-
-```bash
-obsidian2anki process
-obsidian2anki --verbose migrate --dry-run
-obsidian2anki delete-card 1712345678901
-obsidian2anki delete-note 9fb66ee5-6778-4bf4-817d-f82646d1237e
-```
-
-The position of each option matters:
-
-- root options such as `--verbose` must appear **before** the command;
-- command-specific options such as `--dry-run` must appear **after** the command;
-- positional arguments such as `card_id` and `note_id` follow their command.
-
-Correct:
-
-```bash
-obsidian2anki --verbose process --dry-run
-```
-
-Incorrect:
-
-```bash
-obsidian2anki process --verbose
-obsidian2anki --dry-run process
-```
-
-The first incorrect command places a root option after the subcommand. The second places a subcommand-only option before the subcommand.
-
-## Entry Point
-
-The package exposes this console script through `pyproject.toml`:
-
-```toml
-[project.scripts]
-obsidian2anki = "obsidian2anki.main:main"
-```
-
-After an editable installation:
-
-```bash
-python -m pip install -e .
-```
-
-the command should be available in the active virtual environment:
-
-```bash
-obsidian2anki --version
-```
-
-Expected output for the current project version:
-
-```text
-obsidian2anki 0.1.0
-```
-
-The console script calls `obsidian2anki.main:main`, which performs these high-level steps:
-
-1. build the argparse parser;
-2. register argcomplete integration;
-3. parse the command line;
-4. configure file and optional console logging;
-5. construct the application and all dependencies;
-6. map the selected command to an application method;
-7. execute the method;
-8. translate exceptions and keyboard interruption raised during the selected handler into process exit statuses.
-
-## Startup Requirements
-
-The CLI imports the application modules before parsing the command. Several modules load `Settings` at import time, so all required configuration variables must be valid even for commands such as:
-
-```bash
-obsidian2anki --help
-obsidian2anki --version
-```
-
-At minimum, the Pydantic settings model must be able to resolve every required variable from the repository-root `.env` file or the process environment.
-
-The current settings model requires:
-
-```text
-STATE_FOLDER
-API_KEY
-PROMPT_FILE
-INCLUDE_TAGS
-EXCLUDE_TAGS
-ANKI_URL
-DECK_NAME
-LOCAL_VAULT
-INBOX_FOLDER
-MAIN_NOTES_FOLDER
-MAX_RETRIES_ON_ANKI_DUPLICATE_CARD
-```
-
-After argument parsing, normal subcommands construct every dependency, not only the components directly needed by the selected operation. During that construction:
-
-- the vault and Anki managers are initialized;
-- the updated `StateManager` creates `STATE_FOLDER` and `state.json` when missing, then loads the state file;
-- the AI component reads the configured prompt file;
-- the Gemini client is created.
-
-Consequently, a malformed state file or unreadable prompt can prevent a command from reaching its own handler.
-
-> [!NOTE]
-> `--help` and `--version` cause argparse to exit during parsing, before the application dependency container is instantiated. They still require import-time settings validation, but they do not normally construct the AI client or initialize runtime state.
-
-## Global Help
-
-Run:
-
-```bash
-obsidian2anki --help
-```
-
-The parser exposes this command surface:
-
-```text
-usage: obsidian2anki [-h] [-v] [--version]
-                     {migrate,process,clear,format-notes,doctor,stats,delete-card,delete-note}
-                     ...
-
-Sync Obsidian notes into Anki flashcards.
-```
-
-Available root options:
-
-```text
--h, --help     show help and exit
--v, --verbose  increase output verbosity
---version      show the installed package version and exit
-```
-
-Use command-specific help for syntax and arguments:
-
-```bash
-obsidian2anki process --help
-obsidian2anki migrate --help
-obsidian2anki delete-card --help
-```
+`doctor` is registered separately from the normal application commands and is routed directly from `main.py` before `build_app()`.
 
 ## Global Options
 
-### `-h`, `--help`
-
-Display root or subcommand help and exit without running the selected workflow.
-
-Root help:
+### Help
 
 ```bash
 obsidian2anki --help
+obsidian2anki process --help
 ```
 
-Subcommand help:
+`argparse` also adds `-h` / `--help` to each parser.
 
-```bash
-obsidian2anki clear --help
-```
-
-Argparse exits with status `0` after displaying requested help.
-
-### `--version`
-
-Display the version installed in Python package metadata:
+### Version
 
 ```bash
 obsidian2anki --version
 ```
 
-The value comes from:
+The version is read through:
 
 ```python
 importlib.metadata.version("obsidian2anki")
 ```
 
-For the current package:
+The package must be installed so distribution metadata exists.
 
-```text
-obsidian2anki 0.1.0
-```
-
-`--version` is a root option and should be used without a subcommand.
-
-### `-v`, `--verbose`
-
-Change the logging level from `INFO` to `DEBUG`:
+### Verbose logging
 
 ```bash
 obsidian2anki --verbose process
 obsidian2anki -v migrate --dry-run
 ```
 
-The option must precede the subcommand:
+`--verbose` changes the root logging level from `INFO` to `DEBUG`.
+
+Because it is a top-level option, it must appear before the subcommand:
 
 ```bash
 # Correct
-obsidian2anki --verbose stats
+obsidian2anki --verbose process
 
 # Incorrect
-obsidian2anki stats --verbose
+obsidian2anki process --verbose
 ```
-
-Verbose mode can reveal:
-
-- note names discovered by migration or formatting previews;
-- folder note names collected by statistics;
-- Anki connectivity attempts;
-- additional processing and diagnostic details;
-- full debug-level entries in `logs/obsidian2anki.log`.
-
-It does not change processing logic or enable a dry run.
 
 ## Command Summary
 
-| Command                 | Primary purpose                                                                    | Modifies vault | Modifies Anki | Modifies state | Supports `--dry-run` |
-| ----------------------- | ---------------------------------------------------------------------------------- | :------------: | :-----------: | :------------: | :------------------: |
-| `process`               | Process eligible notes from the inbox.                                             |      Yes       |      Yes      |      Yes       |         Yes          |
-| `migrate`               | Process new or changed notes in the main folder.                                   |      Yes       |      Yes      |      Yes       |         Yes          |
-| `format-notes`          | Add required YAML structure to legacy notes.                                       |      Yes       |      No       |       No       |         Yes          |
-| `clear`                 | Delete all generated Anki notes tracked in state and clear managed metadata/state. |      Yes       |      Yes      |      Yes       |         Yes          |
-| `delete-card <card_id>` | Delete one tracked generated Anki note.                                            |      Yes       |      Yes      |      Yes       |          No          |
-| `delete-note <note_id>` | Delete all generated Anki notes linked to one tracked vault note.                  |      Yes       |      Yes      |      Yes       |          No          |
-| `doctor`                | Display environment and dependency checks.                                         |      No¹       |      No¹      |      No¹       |          No          |
-| `stats`                 | Display vault, state, and Anki counts.                                             |      No¹       |      No¹      |      No¹       |          No          |
-
-¹ Application startup still creates the log directory and log file. With the updated state initialization, dependency construction may also create the configured state directory and an empty `state.json`. Anki-related reads can attempt to launch Anki when it is not already running.
+| Command | Main source | Main mutations | Dry run |
+| --- | --- | --- | :---: |
+| `process` | Recursive `.md` scan of inbox | Anki, frontmatter, file location, state | Yes |
+| `migrate` | Recursive `.md` scan of main folder | Anki, frontmatter, state | Yes |
+| `format-notes` | Immediate entries in main folder | Source files | Yes |
+| `clear` | Local state entries | Anki, frontmatter, state | Yes |
+| `delete-card <card_id>` | One tracked Anki note ID | Anki, frontmatter, state | No |
+| `delete-note <note_id>` | One vault frontmatter ID | Anki, frontmatter, state | No |
+| `doctor` | Settings and runtime dependencies | Logs only | No |
+| `stats` | Folders, state, Anki deck | Logs only | No |
 
 ## `process`
 
-Process notes from the configured inbox folder.
+Process notes from `INBOX_FOLDER`.
 
 ### Syntax
 
 ```bash
-obsidian2anki process [--dry-run]
-```
-
-Verbose forms:
-
-```bash
+obsidian2anki process
+obsidian2anki process --dry-run
 obsidian2anki --verbose process
-obsidian2anki --verbose process --dry-run
 ```
 
-### Source folder
+### Discovery
 
-The command reads immediate files from:
+`VaultManager.get_folder_notes(INBOX_FOLDER)`:
 
-```text
-<LOCAL_VAULT>/<INBOX_FOLDER>
-```
+- verifies the configured root exists;
+- scans nested directories recursively;
+- includes only files whose suffix is exactly `.md`;
+- parses frontmatter and normalized body content.
 
-With the example configuration:
-
-```text
-/path/to/MyVault/00_Inbox
-```
-
-Folder traversal is not recursive. Every immediate regular file is passed to the frontmatter reader; the current implementation does not restrict discovery to `.md` files.
+A missing folder is logged by `VaultManager`, which then implicitly returns `None`. `ProcessingService` treats that like no discovered notes.
 
 ### Eligibility
 
-Each note must:
+Every discovered note is checked with `has_right_tags()`.
 
-- contain a readable `id` field;
-- expose `tags` as a YAML list for tag filtering;
-- contain no tag listed in `EXCLUDE_TAGS`;
-- contain at least one tag listed in `INCLUDE_TAGS`, unless `INCLUDE_TAGS` is empty.
+A note passes when:
 
-Excluded tags always take priority.
+```text
+no excluded tag is present
+AND
+(include list is empty OR at least one included tag is present)
+```
 
-A note that fails tag filtering remains unchanged in the inbox.
+`process` does not use state-based `needs_processing()`. Every eligible note still in the inbox is passed to the note lifecycle.
 
 ### Real-run behavior
 
-For each eligible inbox note, `process` calls the single-note workflow:
+For each eligible note:
 
-1. skip card generation when normalized content is empty;
-2. when `anki_cards` metadata exists, try to delete the previously linked Anki notes first;
-3. send the note to Gemini and validate the structured flashcard batch;
-4. add the generated notes to the configured Anki deck;
-5. regenerate and retry when Anki insertion returns no IDs;
-6. write the returned IDs to `anki_cards` frontmatter;
-7. move the source file from the inbox to `MAIN_NOTES_FOLDER`;
-8. queue title, path, hash, card IDs, count, and timestamps for state;
-9. save state when the command finishes, including when the service exits through an exception.
+1. empty normalized content is logged and treated as successful without moving or recording the note;
+2. existing `anki_cards` are deleted before replacement generation;
+3. Gemini generates flashcards;
+4. Anki insertion is attempted;
+5. insertion may regenerate and retry;
+6. generated IDs are written to frontmatter;
+7. the file is moved to the root of `MAIN_NOTES_FOLDER`;
+8. a state entry is staged;
+9. state is saved in the service `finally` block.
 
-Example:
-
-```bash
-obsidian2anki process
-```
-
-### Failure behavior
-
-`ProcessingService` does not stop after `process_note()` returns `False`; it continues to later eligible notes. Individual note errors are logged inside `NoteProcessor` and converted to a `False` result.
-
-Because those per-note failures are handled internally, the top-level CLI can still return exit status `0` even when one or more notes fail. Review terminal output and the log file rather than relying only on the shell status.
+Processing continues to later notes even when `process_note()` returns `False`, because `ProcessingService` does not inspect the return value.
 
 ### Dry run
 
@@ -347,877 +166,472 @@ Because those per-note failures are handled internally, the top-level CLI can st
 obsidian2anki process --dry-run
 ```
 
-The current preview:
+The service:
 
-- reads all immediate inbox files;
-- reports the number of files found;
-- does not enter the tag-filtering or single-note processing loop;
-- does not call Gemini;
-- does not add or delete Anki notes;
-- does not write metadata;
-- does not move files;
-- does not add new state entries.
+- discovers and parses inbox notes;
+- logs the total discovered count;
+- returns before tag evaluation and note processing.
 
-It is therefore a folder-level preview, not a complete per-note eligibility plan.
+It does **not** currently list tag-eligible notes or planned card replacements. Use dry run as a basic discovery/startup check, not as a complete execution plan.
+
+### Exit behavior
+
+Many note-level failures are caught inside `NoteProcessor`, logged, and converted to `False`. Because `ProcessingService` ignores that result, the command can finish with status `0` even when one or more notes failed.
 
 ## `migrate`
 
-Synchronize existing notes from the configured main notes folder.
+Process new or changed notes already located in `MAIN_NOTES_FOLDER`.
 
 ### Syntax
-
-```bash
-obsidian2anki migrate [--dry-run]
-```
-
-Verbose forms:
-
-```bash
-obsidian2anki --verbose migrate
-obsidian2anki --verbose migrate --dry-run
-```
-
-### Source folder
-
-The command reads immediate files from:
-
-```text
-<LOCAL_VAULT>/<MAIN_NOTES_FOLDER>
-```
-
-### Eligibility and change detection
-
-A note is selected only when both conditions are true:
-
-1. it passes include/exclude tag filtering;
-2. it needs processing.
-
-A note needs processing when:
-
-- its frontmatter `id` is not present in state; or
-- its normalized content hash differs from the stored SHA-256 hash; or
-- its filename-derived title differs from the stored title.
-
-The hash is based on normalized note content, not raw Markdown bytes or tags.
-
-### Real-run behavior
-
-For every selected note, migration uses the same single-note workflow as `process`. Existing `anki_cards` are deleted before replacement generation, then successful IDs are written back and state is updated.
 
 ```bash
 obsidian2anki migrate
-```
-
-Migration saves pending state in a `finally` block.
-
-### Failure behavior
-
-Unlike inbox processing, migration stops its loop after the first selected note for which `process_note()` returns `False`:
-
-```text
-selected note fails -> migration loop stops -> pending state is saved
-```
-
-The failure is still normally handled inside `NoteProcessor`, so the CLI may return status `0`. Check logs to verify that all selected notes completed.
-
-### Dry run
-
-```bash
 obsidian2anki migrate --dry-run
+obsidian2anki --verbose migrate --dry-run
 ```
 
-The migration preview:
+### Discovery
 
-- reads main-folder notes;
-- applies tag filtering;
-- checks state and content/title changes;
-- reports how many notes require processing;
-- lists selected note titles at debug level when `--verbose` is enabled;
-- avoids Gemini, Anki, vault writes, and new state entries.
+Migration uses the same recursive `.md` discovery as `process`.
 
-For the most useful preview:
+### Eligibility
+
+A note must:
+
+1. pass tag filters; and
+2. be absent from state or differ by normalized-content hash or filename-derived title.
+
+Tags and raw Markdown formatting are not part of the change hash.
+
+### Candidate preview
+
+Before mutation, migration builds a list of candidate titles and logs:
+
+- candidate count;
+- total discovered count;
+- candidate titles at debug level.
+
+Use:
 
 ```bash
 obsidian2anki --verbose migrate --dry-run
 ```
 
+for the most useful preview.
+
+### Real-run behavior
+
+Candidates are processed sequentially through `NoteProcessor`.
+
+Migration stops after the first `False` result. State is still saved in a `finally` block, so successful staged entries before the failure are persisted.
+
+### Dry run
+
+Dry run performs discovery, tag checks, and state change detection, then returns before Anki, vault, or state mutation.
+
+Normal application construction still occurs first. It may create the state directory/file, read existing state, and read the AI prompt.
+
 ## `format-notes`
 
-Convert legacy files in the main notes folder to the YAML structure required by Obsidian2Anki.
+Convert legacy main-folder files to required frontmatter.
 
 ### Syntax
 
 ```bash
-obsidian2anki format-notes [--dry-run]
+obsidian2anki format-notes --dry-run
+obsidian2anki format-notes
 ```
 
-Recommended preview:
+### Intended legacy input
 
-```bash
-obsidian2anki --verbose format-notes --dry-run
-```
-
-### Intended input
-
-The formatter assumes a legacy note whose first line contains whitespace-separated Obsidian tags:
+The converter assumes the first line contains space-separated hashtag tokens:
 
 ```markdown
-#python #functions
+#Python #Functions
 
 # Python Functions
 
-Content...
+A function groups reusable behavior.
 ```
 
-It removes the first line and rewrites the file as:
+It rewrites the file as:
 
 ```yaml
 ---
 id: <generated UUID>
 tags:
-  - python
-  - functions
+  - Python
+  - Functions
 ---
 ```
 
-followed by the remaining lines.
+followed by the remaining original lines.
 
-### Preview behavior
+### Discovery limitations
 
-The dry run:
+Unlike process and migration, formatter discovery:
 
-- examines immediate files in `MAIN_NOTES_FOLDER`;
-- classifies a file as legacy when parsed frontmatter contains fewer than two metadata keys;
-- reports the legacy count and the current implementation's total directory-entry count;
-- lists legacy filenames in verbose mode;
-- does not write any note.
+- is non-recursive;
+- iterates every immediate file in `MAIN_NOTES_FOLDER`;
+- does not check `.md` before frontmatter parsing;
+- considers a file formatted only when both `id` and `tags` keys exist.
 
-```bash
-obsidian2anki --verbose format-notes --dry-run
-```
-
-### Real-run warning
-
-> [!WARNING]
-> The current real-run loop calls `ensure_note_format()` for **every immediate file** in the main notes folder, not only the files classified as legacy during the preview. Running it against already formatted notes can prepend new frontmatter, regenerate IDs, reinterpret the first line as tags, and damage existing metadata.
-
-Back up the vault first. Until the loop is corrected, use this command only on a folder known to contain exclusively compatible legacy files.
-
-```bash
-obsidian2anki format-notes
-```
-
-The command does not update Anki or `state.json` directly, but changing note IDs can make existing state and Anki relationships inconsistent.
-
-## `clear`
-
-Delete all application-managed Anki notes referenced by state, remove `anki_cards` metadata from the corresponding vault files, and clear local state.
-
-### Syntax
-
-```bash
-obsidian2anki clear [--dry-run]
-```
-
-Preview first:
-
-```bash
-obsidian2anki clear --dry-run
-```
-
-### Real-run behavior
-
-For every state entry, `clear`:
-
-1. marks the entry's generated ID list empty in state;
-2. saves that state change;
-3. removes the `anki_cards` property from the stored vault path;
-4. calls Anki deletion for each stored generated ID;
-5. logs the source note ID;
-6. after all entries, replaces state with an empty object and saves it.
-
-The Markdown note files and their content are not intentionally deleted. Their managed `anki_cards` metadata is removed.
-
-Run:
-
-```bash
-obsidian2anki clear
-```
-
-### Safety considerations
-
-> [!CAUTION]
-> This command is destructive and has no confirmation prompt. `--dry-run` is the only built-in preview.
-
-The operation spans state, vault files, and Anki without a transaction. If an Anki request fails, the connector can log the failure and return without raising, while later vault/state cleanup may continue. Backups are important.
+Directories are skipped by the mutation condition but still affect the incorrectly calculated “total notes” log because the code counts a list of Boolean values rather than only `True` entries.
 
 ### Dry run
 
-```bash
-obsidian2anki clear --dry-run
-```
+Dry run logs the number of files that appear to need formatting and, with `--verbose`, their filename-derived titles. It does not rewrite files.
 
-The current preview:
+### Real-run warning
 
-- reads state;
-- reports how many source notes are tracked;
-- does not enumerate their IDs;
-- does not contact the per-note deletion workflow;
-- does not modify vault metadata, Anki, or state.
+The conversion is destructive and based on one legacy convention. Back up the main folder before running it.
 
-## `delete-card`
+A blank first line produces no tags; a normal prose first line is split into tag values after only removing leading `#` characters.
 
-Delete one generated Anki note ID and remove that ID from its source note metadata and state entry.
+## `clear`
 
-The project names the argument `card_id`, but AnkiConnect's `addNotes` and `deleteNotes` actions use the returned value as an **Anki note ID**.
+Delete every generated Anki note referenced by local state and reset tracking.
 
 ### Syntax
 
 ```bash
-obsidian2anki delete-card CARD_ID
+obsidian2anki clear --dry-run
+obsidian2anki clear
 ```
-
-Example:
-
-```bash
-obsidian2anki delete-card 1712345678901
-```
-
-### Argument type
-
-`CARD_ID` is parsed as an integer by argparse. A non-integer is rejected before command execution:
-
-```bash
-obsidian2anki delete-card abc
-```
-
-Typical result:
-
-```text
-error: argument card_id: invalid int value: 'abc'
-```
-
-Argparse exits with status `2` for this parsing error.
 
 ### Real-run behavior
 
-The command:
+For every state entry:
 
-1. searches every state entry for the supplied generated ID;
-2. removes it from the matching state's `anki_note_ids` list;
-3. saves state;
-4. sends `deleteNotes` to AnkiConnect;
-5. removes the ID from the source note's `anki_cards` metadata;
-6. deletes the complete state entry when no generated IDs remain.
+1. `NoteProcessor.delete_note_cards()` clears the state's generated-ID list and saves it;
+2. source `anki_cards` metadata is removed;
+3. every recorded Anki note ID is deleted;
+4. `ClearService` removes source metadata again;
+5. after the loop, state is cleared and saved.
 
-If the ID is not found in state, the service logs a warning and returns without contacting Anki or changing the vault.
+The source Markdown files are not deleted.
 
-### No dry-run support
+### Dry run
 
-This command does not accept `--dry-run`:
+Dry run reads state, logs the number of tracked notes, and returns before mutation. It does not verify that every source file or Anki note still exists.
 
-```bash
-# Invalid
-obsidian2anki delete-card 1712345678901 --dry-run
-```
+### Safety
 
-Confirm the ID manually before execution.
+The command has no confirmation prompt. Always run dry run first and keep backups.
 
-### Exit-status caveat
+## `delete-card`
 
-A missing ID is logged and treated as a normal service return, so the command normally exits with status `0` even though nothing was deleted.
-
-## `delete-note`
-
-Delete all generated Anki notes associated with one tracked Obsidian note ID, remove the note's `anki_cards` metadata, and remove its state entry.
-
-The source Markdown file itself is not deleted.
+Delete one tracked generated Anki note ID.
 
 ### Syntax
 
 ```bash
-obsidian2anki delete-note NOTE_ID
+obsidian2anki delete-card 1749920000001
 ```
 
-Example:
+The positional argument is parsed through `CardId`, a `NewType` over `int`.
+
+### Behavior
+
+1. convert the value to `int` again in `DeletingService`;
+2. locate and remove the ID from state;
+3. save state;
+4. delete the Anki note with `deleteNotes`;
+5. remove the value from source `anki_cards`;
+6. remove the whole state entry when no IDs remain.
+
+### Important data-shape limitation
+
+`VaultManager.remove_list_item()` assumes `anki_cards` was parsed as a comma-separated string and calls `.split(",")`.
+
+Frontmatter containing one numeric ID may parse as an integer, while YAML-list syntax parses as a list. Those representations can raise during deletion even though `_process_file()` can read them successfully.
+
+### State limitation
+
+`StateManager.delete_card()` removes the ID but does not update `card_count`. The count remains stale until the state entry is replaced or removed.
+
+### No dry run
+
+Argument commands do not implement dry-run metadata.
+
+## `delete-note`
+
+Delete all tracked generated Anki notes associated with one Obsidian note ID.
+
+### Syntax
 
 ```bash
 obsidian2anki delete-note 9fb66ee5-6778-4bf4-817d-f82646d1237e
 ```
 
-`NOTE_ID` is parsed as a string. The CLI does not validate UUID syntax; it uses the exact string as the state key.
+`note_id` is a string `NewType` and is not validated as a UUID.
 
-### Real-run behavior
+### Behavior
 
-For a tracked note, the command:
+1. look up the state entry by frontmatter ID;
+2. delete each recorded Anki note ID;
+3. remove source `anki_cards`;
+4. remove the state entry.
 
-1. obtains the source file path from state;
-2. obtains every generated Anki ID from state;
-3. deletes each generated Anki note;
-4. removes `anki_cards` from the source file;
-5. removes the complete state entry and saves state.
+The source Markdown file remains.
 
-### Missing-state warning
+### Unknown ID defect
 
-> [!WARNING]
-> The current implementation logs that an unknown note ID is absent but does not return immediately. It then attempts to construct a path and iterate IDs from missing values, which can raise an exception. The top-level CLI catches that exception and exits with status `1`.
+When the ID is absent, the service logs:
 
-Verify the ID in `state.json` before running the command.
-
-### No dry-run support
-
-This command has no preview option:
-
-```bash
-# Invalid
-obsidian2anki delete-note NOTE_ID --dry-run
+```text
+Note with id: '...' is not in state
 ```
+
+but does not return. It then attempts `Path(None)` and can raise. The normal command error boundary logs the exception and returns status `1`.
+
+### No dry run
+
+There is no preview or confirmation option.
 
 ## `doctor`
 
-Run environment and integration diagnostics and display a Rich table.
+Display configuration or runtime diagnostics.
 
 ### Syntax
 
 ```bash
 obsidian2anki doctor
-```
-
-Verbose logging:
-
-```bash
 obsidian2anki --verbose doctor
 ```
 
-### Checks
+### Separate startup path
 
-The table contains these checks:
+Doctor runs before `build_app()`. It therefore avoids normal construction of:
 
-| Check             | What it verifies                                               |
-| ----------------- | -------------------------------------------------------------- |
-| Python Version    | The interpreter is Python 3.12 or newer.                       |
-| `.env` File       | A repository-root `.env` file exists.                          |
-| Local Vault       | `LOCAL_VAULT` exists and is a directory.                       |
-| Inbox Folder      | `<LOCAL_VAULT>/<INBOX_FOLDER>` exists and is a directory.      |
-| Main Notes Folder | `<LOCAL_VAULT>/<MAIN_NOTES_FOLDER>` exists and is a directory. |
-| State Folder      | `<repository-root>/<STATE_FOLDER>` exists and is a directory.  |
-| API key           | Gemini accepts the configured API key.                         |
-| Prompt File       | `<repository-root>/<PROMPT_FILE>` exists as a file.            |
-| Anki Deck         | `DECK_NAME` appears in Anki's deck list.                       |
-| Anki              | AnkiConnect responds at `ANKI_URL`.                            |
+- `StateManager`;
+- `NoteProcessor`;
+- workflow services;
+- the application facade.
 
-Example table shape:
+### Environment-results mode
 
-```text
-╭─────┬───────────────────┬────────────────────────────────────╮
-│     │ Check             │ Result                             │
-├─────┼───────────────────┼────────────────────────────────────┤
-│ ✅  │ Python Version    │ Python 3.13.x is supported.        │
-│ ✅  │ .env File         │ .env file found at ...             │
-│ ... │ ...               │ ...                                │
-╰─────┴───────────────────┴────────────────────────────────────╯
-```
+If `get_settings()` raises a Pydantic validation or settings error, doctor prints an **Environment Results** table with:
 
-### Side effects and network access
+- Field
+- Error Type
+- Location
+- Message
+- Value
 
-`doctor` does not intentionally alter vault notes, generated Anki notes, or existing state data. It does, however:
+Sensitive field names containing `key`, `token`, `secret`, or `password` are redacted.
 
-- initialize logging;
-- construct all application dependencies;
-- create the state folder/file when missing under the updated `StateManager`;
-- read and parse the state file;
-- read the prompt during AI initialization;
-- send a Gemini API request to validate the key;
-- query AnkiConnect for decks and status;
-- potentially try to launch the `anki` executable because the deck check uses the normal Anki connector.
+Runtime checks do not run in this mode.
 
-It is therefore a diagnostic command, but not an offline command.
+### Runtime-results mode
 
-### Startup limitation
+With valid settings, doctor checks in this order:
 
-Some conditions can prevent the table from appearing at all:
+1. Python version
+2. `.env` file
+3. local vault
+4. inbox folder
+5. main notes folder
+6. state folder
+7. prompt file
+8. API key
+9. Anki
+10. Anki deck
 
-- missing required Pydantic settings;
-- malformed JSON in `state.json`;
-- an unreadable or missing prompt file during AI construction;
-- other dependency-construction errors.
+The deck row is marked failed and skipped when Anki is unreachable.
 
-This happens because dependencies are constructed before `Doctor.run()` performs its checks.
+### Side effects
+
+Doctor is read-oriented but not offline. It:
+
+- reads settings and prompt;
+- inspects files/folders;
+- contacts Gemini;
+- contacts AnkiConnect;
+- writes logs.
+
+It does not construct `StateManager`, so it does not create the state folder or `state.json`.
+
+### Prompt-loading caveat
+
+After settings pass, `Doctor` creates `AI()` before `RuntimeChecker` runs. `AI()` immediately reads `PROMPT_FILE`. A missing or unreadable prompt can therefore raise before the runtime table shows the planned prompt row.
 
 ### Exit-status caveat
 
-Failed diagnostic rows are logged as an error, but `Doctor.run()` does not raise or return a failure code. When the table is produced successfully, the CLI normally exits with status `0` even if one or more checks show ❌.
+Failed environment or runtime rows do not currently produce a non-zero exit code. A completed `Doctor.run()` returns `None`, which means status `0`.
 
-Use the table contents—not only `$?` or `%ERRORLEVEL%`—to determine environment health.
+Unexpected exceptions also occur before the normal handler `try/except` and may escape directly.
+
+See [Diagnostics](diagnostics.md).
 
 ## `stats`
 
-Display summary counts from the vault, local state, and Anki.
+Display current counts.
 
 ### Syntax
 
 ```bash
 obsidian2anki stats
-```
-
-Verbose logging:
-
-```bash
 obsidian2anki --verbose stats
 ```
 
-### Intended statistics
+### Intended rows
 
-The Rich table is designed to report:
+- notes in `INBOX_FOLDER`;
+- notes in `MAIN_NOTES_FOLDER`;
+- processed state entries;
+- unprocessed main-folder files;
+- generated Anki notes in `DECK_NAME`.
 
-| Statistic             | Source                                                         |
-| --------------------- | -------------------------------------------------------------- |
-| Notes in inbox folder | Immediate files in `INBOX_FOLDER`.                             |
-| Notes in main folder  | Immediate files in `MAIN_NOTES_FOLDER`.                        |
-| Processed notes       | Number of entries in local state.                              |
-| Unprocessed notes     | Main-folder files whose absolute paths are not found in state. |
-| Generated cards       | Anki note IDs returned by `findNotes` for `DECK_NAME`.         |
+### Scan behavior
 
-The "Generated Cards" label counts Anki notes, because the implementation uses AnkiConnect's `findNotes` action.
+Folder counts and unprocessed detection inspect only immediate files and do not restrict suffixes to `.md`.
 
-### Read behavior
-
-The command reads:
-
-- the immediate contents of both configured vault folders;
-- all state entries;
-- Anki notes in the configured deck.
-
-It writes only logs and normal runtime initialization files. Anki lookup can attempt to launch Anki when unavailable.
-
-### Current implementation defect
-
-> [!WARNING]
-> In the current source, `_processed_notes()` iterates `(id, StateNote)` pairs but then evaluates `processed_note[1].title`. `processed_note` is already a `StateNote`, so indexing it can raise `TypeError` whenever state contains at least one entry. In that situation, the top-level CLI logs an unhandled error and exits with status `1` before displaying the table.
-
-Until corrected, `stats` is reliable only when state is empty or the bug is fixed. The intended debug statement should access:
-
-```python
-processed_note.title
-```
-
-rather than:
-
-```python
-processed_note[1].title
-```
-
-## Dry-Run Behavior
-
-Dry run is implemented only for command definitions that declare `supports_dry_run=True`.
-
-### Supported commands
-
-```bash
-obsidian2anki process --dry-run
-obsidian2anki migrate --dry-run
-obsidian2anki format-notes --dry-run
-obsidian2anki clear --dry-run
-```
-
-### Unsupported commands
+The generated count comes from:
 
 ```text
-delete-card
-delete-note
-doctor
-stats
+findNotes query="deck:<DECK_NAME>"
 ```
 
-Passing `--dry-run` to an unsupported command produces an argparse error and exit status `2`.
+### Current defect
 
-### Comparison matrix
+With a non-empty state, `_processed_notes()` iterates `(id, StateNote)` pairs but logs `processed_note[1].title`. `StateNote` is not subscriptable. Because the argument expression is evaluated before logging-level filtering, this defect can occur even when debug output is not shown.
 
-| Command        | What the preview calculates                                                                     | What the preview does not do                                                   |
-| -------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `process`      | Counts immediate inbox files.                                                                   | Does not determine or list eligible notes; does not call the per-note loop.    |
-| `migrate`      | Filters tags, checks state/title/hash, counts selected notes, and lists titles in verbose mode. | Does not generate, delete, insert, move, write metadata, or add state entries. |
-| `format-notes` | Detects and counts legacy files; lists them in verbose mode.                                    | Does not rewrite files.                                                        |
-| `clear`        | Counts state entries.                                                                           | Does not list entries or modify Anki, vault metadata, or state.                |
+Until fixed, `stats` may fail for a non-empty state.
 
-### Runtime initialization still occurs
+## Dry-Run Matrix
 
-`--dry-run` prevents the selected service's main writes, but it is not a zero-side-effect process sandbox. Before the service executes, the application still:
+| Command | Parser accepts `--dry-run` | Evaluates eligibility | External mutation prevented | Startup side effects still possible |
+| --- | :---: | :---: | :---: | :---: |
+| `process` | Yes | No; returns before tag filtering | Yes | Yes |
+| `migrate` | Yes | Yes | Yes | Yes |
+| `format-notes` | Yes | Yes, immediate files | Yes | Yes |
+| `clear` | Yes | Reads state count only | Yes | Yes |
+| `delete-card` | No | — | — | Yes |
+| `delete-note` | No | — | — | Yes |
+| `doctor` | No | Diagnostic command | No data mutation intended | Uses separate startup |
+| `stats` | No | Read command | No data mutation intended | Yes |
 
-- validates settings;
-- configures logging and can create `logs/obsidian2anki.log`;
-- constructs every dependency;
-- creates the configured state directory and file when missing;
-- reads state JSON;
-- reads the prompt and creates the Gemini client.
+Normal dry-run commands still construct the complete application. That may create state storage, read the prompt, parse state JSON, and initialize clients.
 
-No Gemini generation request is made by the four dry-run service paths.
+## Logging and Terminal Output
 
-## Verbose Output and Logging
+### File logging
 
-### Default logging
-
-Without `--verbose`, the root logger uses `INFO`:
-
-```bash
-obsidian2anki process
-```
-
-### Debug logging
-
-With `--verbose`, it uses `DEBUG`:
-
-```bash
-obsidian2anki --verbose process
-```
-
-### File location
-
-Every executed command configures a rotating log file at:
+Every command calls `setup_logger()` after argument parsing.
 
 ```text
-<repository-root>/logs/obsidian2anki.log
+logs/obsidian2anki.log
 ```
 
-The log directory is created automatically.
-
-### Rotation
-
-The current handler uses:
+Format:
 
 ```text
-maximum active file size: 5 MiB
-backup count: 3
-encoding: UTF-8
+timestamp | level | logger name | message
 ```
 
-File entries use this format:
+Rotation:
 
-```text
-TIMESTAMP | LEVEL    | LOGGER_NAME | MESSAGE
-```
+- 5 MiB per file;
+- three backups;
+- UTF-8.
 
 ### Console logging
 
-Most commands add a Rich logging handler to the terminal.
+Most commands use Rich logging. `doctor` and `stats` are in `IGNORE_CONSOLE` and print their tables directly instead.
 
-Console logging is intentionally disabled for:
-
-```text
-doctor
-stats
-```
-
-Those commands print their own Rich tables through `Console.print()` while regular logs continue to go to the file.
-
-### Repeated in-process calls
-
-`setup_logger()` returns immediately when the root logger already has handlers. This is normally irrelevant for the installed one-command-per-process workflow, but tests or code that invokes `main()` multiple times in the same interpreter may retain the first call's level and console-handler choice.
-
-## Terminal Output
-
-Obsidian2Anki uses two output styles.
-
-### Rich log output
-
-Commands such as `process`, `migrate`, `clear`, `format-notes`, and deletion commands emit formatted logging to the terminal when console logging is enabled.
-
-Typical messages include:
-
-```text
-Found 3 notes in '00_Inbox'.
-Generated 4 flash cards for note with id: '...'.
-Processed note with id: '...'.
-Finished processing notes.
-```
-
-### Rich tables
-
-`doctor` and `stats` print tables directly. Their normal logger console handler is disabled to avoid mixing log lines with table output.
-
-### Standard streams
-
-Argparse help and parsing errors use argparse's standard output/error behavior. The application does not currently provide machine-readable JSON output, quiet mode, or color-disable flags.
-
-## Argument Validation
-
-### Required subcommand
-
-The parser requires one subcommand:
-
-```bash
-obsidian2anki
-```
-
-Without a command, argparse reports that `command` is required and exits with status `2`.
-
-### `card_id`
-
-`delete-card` uses `int` as its argparse conversion function:
-
-```bash
-obsidian2anki delete-card 1712345678901
-```
-
-Negative and zero values are syntactically accepted because there is no range validator, although they are unlikely to match state.
-
-### `note_id`
-
-`delete-note` uses plain string conversion:
-
-```bash
-obsidian2anki delete-note any-string
-```
-
-No UUID validator, length check, or state-existence check is performed by argparse.
-
-### Option placement
-
-Root options are not automatically inherited by subparsers. Use:
+### Verbose mode
 
 ```bash
 obsidian2anki --verbose migrate --dry-run
 ```
 
-not:
+Useful debug information includes migration candidate names, note details, and transport diagnostics.
 
-```bash
-obsidian2anki migrate --verbose --dry-run
-```
+### Repeated in-process invocation
 
-### Extra arguments
-
-Unexpected options or positional values produce an argparse error and status `2`.
+`setup_logger()` returns when the root logger already has handlers. Tests or embedded callers that run `main()` repeatedly must reset logging explicitly to change configuration between calls.
 
 ## Exit Statuses
 
-The top-level `main()` explicitly returns these statuses:
+Implemented top-level statuses:
 
-| Status | Meaning in the current CLI                                                                                                                 |
-| :----: | ------------------------------------------------------------------------------------------------------------------------------------------ |
-|  `0`   | Command returned without an uncaught exception; also used for help and version.                                                            |
-|  `1`   | The selected handler raised an exception caught by the command boundary, or Python terminated because startup failed before that boundary. |
-|  `2`   | Argparse rejected the command line or a typed argument.                                                                                    |
-| `130`  | A `KeyboardInterrupt` was caught during command execution.                                                                                 |
+| Situation | Status |
+| --- | :---: |
+| Normal handler returns | `0` |
+| `KeyboardInterrupt` inside normal handler call | `130` |
+| Exception inside normal handler call | `1` |
 
-### Important interpretation
+Important exceptions:
 
-Status `0` means the Python command handler returned; it does **not** always mean the requested domain operation fully succeeded.
+- `build_app()` runs before the normal `try`, so startup failures can escape instead of returning `1`.
+- doctor runs before the normal `try`.
+- services often catch failures internally and return/log without propagating them.
+- doctor failed rows still return `0`.
 
-Examples that can still end with `0`:
-
-- `process_note()` catches an exception, logs it, and returns `False`;
-- migration stops after a handled note failure;
-- inbox processing continues after handled note failures;
-- `delete-card` cannot find the supplied ID in state;
-- `doctor` displays failed checks;
-- an Anki connector call logs a request failure and returns `None` without raising to the top level.
-
-For automation, inspect logs and verify resulting state/vault/Anki data rather than depending only on the process status.
-
-### Keyboard interruption
-
-Pressing `Ctrl+C` while the selected handler is executing is caught by the top-level boundary:
-
-```text
-Interrupted by user. Exiting.
-```
-
-The CLI returns `130`.
-
-Service `finally` blocks still run while exceptions propagate. In particular, `process` and `migrate` call `state.save()` in `finally`, so already prepared state can be persisted during interruption.
+Do not treat a zero status as proof that every note or diagnostic passed in this version.
 
 ## Shell Completion
 
-The CLI calls:
+`build_arg_parser()` calls:
 
 ```python
-argcomplete.autocomplete(parser)
+argcomplete.autocomplete(arg_parser.parser)
 ```
 
-and declares `argcomplete` as a dependency. This provides the parser hook needed for shell completion when argcomplete has been activated for the shell and command.
+The `argcomplete` package is installed as a runtime dependency. Shell-level activation is still required for completion to appear.
 
-Without shell registration, the CLI continues to work normally; pressing Tab simply will not use argcomplete's dynamic suggestions.
+## Recommended Sequences
 
-Completion candidates are derived from the argparse structure, including:
-
-- subcommand names;
-- global options;
-- `--dry-run` on supported subcommands;
-- help flags.
-
-## Recommended Command Sequences
-
-### First configuration check
-
-Open Anki, then run:
+### First setup
 
 ```bash
 obsidian2anki doctor
-```
-
-Read every table row. Do not treat status `0` as proof that every check passed.
-
-### Preview and process the inbox
-
-```bash
-obsidian2anki process --dry-run
+obsidian2anki --verbose process --dry-run
 obsidian2anki process
 ```
 
-The preview only confirms inbox discovery. For exact eligibility, inspect note tags and configuration before the real command.
-
-### Preview and migrate existing notes
+### Existing formatted vault
 
 ```bash
 obsidian2anki --verbose migrate --dry-run
 obsidian2anki migrate
 ```
 
-Verbose migration preview is the most informative dry run because it lists selected note titles.
-
-### Format a legacy-only folder
+### Legacy conversion
 
 ```bash
-obsidian2anki --verbose format-notes --dry-run
-```
-
-Review the detected files, back up the vault, confirm the main folder contains only compatible legacy notes, then:
-
-```bash
+obsidian2anki format-notes --dry-run
+# Back up the folder and inspect the legacy first-line format.
 obsidian2anki format-notes
+obsidian2anki migrate --dry-run
+obsidian2anki migrate
 ```
 
-Because of the current all-files formatting defect, do not run the real command on a mixed or already formatted folder.
-
-### Delete one generated item
-
-Find the generated Anki note ID in the source note's `anki_cards` metadata or state, then:
-
-```bash
-obsidian2anki delete-card 1712345678901
-```
-
-Verify both Anki and the source frontmatter afterward.
-
-### Delete all generated items for one source note
-
-Confirm that the exact source `id` exists in state:
-
-```bash
-obsidian2anki delete-note 9fb66ee5-6778-4bf4-817d-f82646d1237e
-```
-
-### Clear all managed data
+### Bulk rebuild
 
 ```bash
 obsidian2anki clear --dry-run
-```
-
-Back up the vault and Anki collection, then:
-
-```bash
 obsidian2anki clear
-```
-
-## Common CLI Mistakes
-
-### Placing `--verbose` after the command
-
-Incorrect:
-
-```bash
-obsidian2anki process --verbose
-```
-
-Correct:
-
-```bash
-obsidian2anki --verbose process
-```
-
-### Placing `--dry-run` before the command
-
-Incorrect:
-
-```bash
-obsidian2anki --dry-run migrate
-```
-
-Correct:
-
-```bash
 obsidian2anki migrate --dry-run
+obsidian2anki migrate
 ```
 
-### Expecting dry run on deletion commands
-
-Invalid:
-
-```bash
-obsidian2anki delete-card 123 --dry-run
-obsidian2anki delete-note UUID --dry-run
-```
-
-Neither deletion command currently supports a preview.
-
-### Assuming `process --dry-run` lists eligible notes
-
-It only reads and counts inbox files before returning. It does not apply tag filtering in the preview path.
-
-### Assuming `doctor` is fully offline
-
-It validates the Gemini API key and queries Anki. It can also attempt to start Anki.
-
-### Assuming a green shell status means successful diagnostics
-
-`doctor` can display failed rows and still exit `0`.
-
-### Using an Anki card number instead of the stored note ID
-
-The `anki_cards` name is historical. The generated IDs originate from AnkiConnect `addNotes` and are passed to `deleteNotes`, so use the IDs stored by Obsidian2Anki rather than a browser card ID from another Anki API context.
-
-### Running `format-notes` on formatted notes
-
-The current write loop touches all files in the folder. Always preview and back up first.
+This rebuild sequence is not transactional. Preserve backups.
 
 ## Troubleshooting
 
 ### `obsidian2anki: command not found`
 
-Activate the virtual environment and install the project:
+Activate the intended virtual environment and reinstall:
 
 ```bash
 python -m pip install -e .
 ```
 
-Then verify:
-
-```bash
-obsidian2anki --version
-```
-
-On Windows, ensure the active environment's `Scripts` directory is on the current shell path through activation.
-
-### Help or version fails with a settings validation error
-
-The CLI imports modules that instantiate cached settings before parsing. Create a complete repository-root `.env` file or provide every required variable through the environment.
-
-See [Configuration](configuration.md).
-
-### A normal command fails before logging its start message
-
-Dependency construction occurs before dispatch. Check:
-
-- `.env` parsing and required values;
-- `PROMPT_FILE` existence and permissions;
-- `STATE_FOLDER/state.json` JSON validity;
-- vault path validity;
-- package dependency installation.
-
 ### `unrecognized arguments: --verbose`
 
-Move the option before the command:
+Move it before the command:
 
 ```bash
 obsidian2anki --verbose process
@@ -1225,102 +639,38 @@ obsidian2anki --verbose process
 
 ### `unrecognized arguments: --dry-run`
 
-The selected command may not support dry run, or the option may be in the wrong position.
-
-Supported pattern:
+Place it after a supported command:
 
 ```bash
 obsidian2anki migrate --dry-run
 ```
 
-### `argument card_id: invalid int value`
+Delete commands, doctor, and stats do not support it.
 
-Supply the numeric generated ID stored in `anki_cards` or state:
+### Help or version fails
 
-```bash
-obsidian2anki delete-card 1712345678901
-```
+`--version` depends on installed package metadata. Run through the environment where the editable package is installed.
 
-### `delete-note` exits with status `1` for an unknown ID
+### Doctor shows environment errors
 
-The current service does not return after detecting a missing state key. Confirm the exact ID in `state.json` before retrying.
+Correct the named `.env` fields. Secret-like values are intentionally hidden.
 
-### `stats` crashes with a `StateNote` indexing error
+### Doctor crashes before runtime results
 
-The current `_processed_notes()` implementation indexes a `StateNote` as though it were a tuple. Change:
-
-```python
-processed_note[1].title
-```
-
-to:
-
-```python
-processed_note.title
-```
-
-### The terminal reports an error but the command exits `0`
-
-Some lower layers catch and log failures instead of raising. Inspect:
-
-```text
-logs/obsidian2anki.log
-```
-
-Then verify the source note's frontmatter, state entry, and Anki notes.
+Verify `PROMPT_FILE`. AI construction reads the prompt before runtime checks execute.
 
 ### Anki cannot be reached
 
-Open Anki manually, confirm AnkiConnect is installed, and verify:
-
-```env
-ANKI_URL=http://localhost:8765/
-```
-
-Use:
-
-```bash
-obsidian2anki doctor
-```
-
-but remember that dependency construction and deck lookup can occur before all diagnostics are presented.
-
-### State JSON is empty
-
-An empty `state.json` is valid and loads as an empty state object.
+Open Anki, verify AnkiConnect and `ANKI_URL`, then rerun doctor. Normal `connect()` operations may try to launch an `anki` executable found on `PATH`.
 
 ### State JSON is malformed
 
-Malformed JSON raises during `StateManager` construction and prevents command dispatch. Restore a valid backup or replace the file with an empty JSON object when intentionally resetting only local state:
+Back up the file before editing. Normal commands load it during application construction and currently have no recovery path.
 
-```json
-{}
-```
+### `stats` fails with a `StateNote` error
 
-Do not reset state casually when vault notes still contain `anki_cards`, because the cross-system links will become inconsistent.
+This is the known `_processed_notes()` indexing defect. Inspect state and Anki through other means until the method is fixed.
 
-## Current CLI Constraints
+### A command logs failures but exits `0`
 
-The current command-line implementation has these notable limitations:
-
-1. **Import-time settings loading** — complete valid settings can be required before root help or version is displayed.
-2. **Eager dependency construction** — every normal command constructs vault, Anki, state, AI, processor, and all services.
-3. **No confirmation prompts** — destructive commands execute immediately.
-4. **No dry run for targeted deletions** — `delete-card` and `delete-note` cannot preview changes.
-5. **Inconsistent success signaling** — several handled operational failures still produce exit status `0`.
-6. **Doctor failure rows do not affect exit status** — diagnostics must be read from the table.
-7. **Doctor cannot diagnose every startup failure** — prompt and state loading occur before its checks run.
-8. **`process --dry-run` is shallow** — it counts inbox files but does not determine eligibility.
-9. **`clear --dry-run` is shallow** — it reports only the number of state entries.
-10. **Flat-folder discovery** — note commands inspect only immediate files and do not recurse.
-11. **No extension filter** — non-Markdown files in configured note folders can reach frontmatter parsing.
-12. **Formatter write-loop defect** — real `format-notes` reformats every immediate file rather than only detected legacy files.
-13. **Unknown `delete-note` defect** — a missing state key can lead to a top-level exception.
-14. **Formatter count defect** — the reported total includes every immediate directory entry, not only regular files.
-15. **Current `stats` defect** — non-empty state can trigger invalid `StateNote` indexing.
-16. **Terminology mismatch** — `card_id`, `anki_cards`, and "Generated Cards" represent Anki note IDs in the current AnkiConnect calls.
-17. **No structured output** — commands do not provide JSON, CSV, quiet, or no-color modes.
-18. **No transaction boundary** — vault, Anki, and state changes can partially succeed.
-19. **No reconciliation command** — the CLI cannot automatically repair disagreement between vault metadata, state, and Anki.
-
-These constraints do not change the documented command syntax, but they should guide backups, automation, testing, and future CLI improvements.
+This is current behavior for several caught note/service failures and all failed diagnostic rows. Inspect logs and Rich output.

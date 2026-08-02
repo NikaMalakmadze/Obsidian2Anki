@@ -1,61 +1,44 @@
 # Configuration
 
-This guide explains every configuration value used by **Obsidian2Anki 0.1.0**, how paths are resolved, how tag filters interact, and which important behaviors are currently fixed in source code rather than configurable through `.env`.
-
-> [!IMPORTANT]
-> The current `Settings` model defines no fallback values. Every variable listed in this document must be present, including list settings that are intentionally empty.
-
-For initial installation and external-service setup, see [Installation](installation.md).
+Obsidian2Anki uses `pydantic-settings` to load environment variables from the process environment and from a repository-root `.env` file.
 
 ## Contents
 
-- [Configuration source](#configuration-source)
-- [Complete example](#complete-example)
-- [Settings reference](#settings-reference)
-- [Gemini configuration](#gemini-configuration)
-- [Anki configuration](#anki-configuration)
-- [Obsidian vault configuration](#obsidian-vault-configuration)
-- [State configuration](#state-configuration)
-- [Tag filtering](#tag-filtering)
-- [Anki insertion retries](#anki-insertion-retries)
-- [Path-resolution rules](#path-resolution-rules)
-- [Environment examples](#environment-examples)
-- [Values not currently configurable](#values-not-currently-configurable)
-- [Validation and startup behavior](#validation-and-startup-behavior)
-- [Security guidance](#security-guidance)
+- [Configuration Source](#configuration-source)
+- [Complete Example](#complete-example)
+- [Settings Reference](#settings-reference)
+- [Path Resolution](#path-resolution)
+- [Tag Filtering](#tag-filtering)
+- [Anki Requirements](#anki-requirements)
+- [Prompt and Model Configuration](#prompt-and-model-configuration)
+- [State Configuration](#state-configuration)
+- [Validation and Caching](#validation-and-caching)
+- [Doctor Behavior](#doctor-behavior)
+- [Security](#security)
 - [Troubleshooting](#troubleshooting)
 
 ## Configuration Source
 
-Obsidian2Anki loads settings with `pydantic-settings` from:
+`config.py` defines:
 
-```text
-<repository-root>/.env
+```python
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ```
 
-The repository root is calculated from the installed source layout and stored as `BASE_DIR`. In the recommended editable installation, it is the directory containing `pyproject.toml`.
+For a source checkout, this resolves to the repository root.
 
-Create the local configuration file from the provided example:
+`Settings` uses:
 
-Linux or macOS:
-
-```bash
-cp .env.example .env
+```python
+SettingsConfigDict(
+    env_file=BASE_DIR / ".env",
+    env_file_encoding="utf-8",
+)
 ```
 
-Windows PowerShell:
+Normal environment variables can override values read from `.env` according to Pydantic Settings behavior.
 
-```powershell
-Copy-Item .env.example .env
-```
-
-Windows Command Prompt:
-
-```bat
-copy .env.example .env
-```
-
-The `.env` file should remain local and must not be committed.
+`get_settings()` is decorated with `@lru_cache`, so one process normally uses one settings instance after its first successful load.
 
 ## Complete Example
 
@@ -78,833 +61,486 @@ EXCLUDE_TAGS=[]
 MAX_RETRIES_ON_ANKI_DUPLICATE_CARD=3
 ```
 
-This example processes every non-excluded note, uses `00_Inbox` for normal processing, moves successfully processed notes into `01_Notes`, and stores local state in `data/state.json`.
+Quoting scalar strings is optional in common `.env` files. JSON syntax is recommended for set/list-like values.
 
 ## Settings Reference
 
-| Variable                             | Type                     | Required | Recommended example            | Purpose                                                                             |
-| ------------------------------------ | ------------------------ | :------: | ------------------------------ | ----------------------------------------------------------------------------------- |
-| `API_KEY`                            | String                   |   Yes    | `your_gemini_api_key`          | Authenticates requests to the Google Gemini API.                                    |
-| `PROMPT_FILE`                        | String path              |   Yes    | `input/prompt.md`              | Selects the prompt prepended to each note sent to Gemini.                           |
-| `ANKI_URL`                           | URL string               |   Yes    | `http://localhost:8765/`       | AnkiConnect HTTP endpoint.                                                          |
-| `DECK_NAME`                          | String                   |   Yes    | `Programming`                  | Exact Anki deck used for generated notes and statistics.                            |
-| `LOCAL_VAULT`                        | Directory path           |   Yes    | `/home/user/Documents/MyVault` | Root directory of the Obsidian vault.                                               |
-| `INBOX_FOLDER`                       | Vault-relative path      |   Yes    | `00_Inbox`                     | Folder read by `obsidian2anki process`.                                             |
-| `MAIN_NOTES_FOLDER`                  | Vault-relative path      |   Yes    | `01_Notes`                     | Destination for processed inbox notes and source for migration.                     |
-| `STATE_FOLDER`                       | Repository-relative path |   Yes    | `data`                         | Directory in which `state.json` is created and maintained.                          |
-| `INCLUDE_TAGS`                       | JSON array of strings    |   Yes    | `[]`                           | Optional allowlist for note tags.                                                   |
-| `EXCLUDE_TAGS`                       | JSON array of strings    |   Yes    | `[]`                           | Denylist for note tags. Any match prevents processing.                              |
-| `MAX_RETRIES_ON_ANKI_DUPLICATE_CARD` | Integer                  |   Yes    | `3`                            | Number of regeneration-and-insertion retries after the first failed Anki insertion. |
-
-> [!NOTE]
-> “Required” means the variable must exist in `.env`; it does not mean it must contain a non-empty value. Empty tag lists are valid, but an empty API key, vault path, or deck name will not produce a usable setup.
-
-## Gemini Configuration
+| Variable | Type | Code default | Required without external value | Used by |
+| --- | --- | --- | :---: | --- |
+| `STATE_FOLDER` | `str` | none | Yes | State storage and doctor folder check |
+| `API_KEY` | `str` | none | Yes | Gemini generation and validation |
+| `PROMPT_FILE` | `str` | none | Yes | Prompt loading and doctor file check |
+| `INCLUDE_TAGS` | `set[str]` | empty set | No | Note eligibility |
+| `EXCLUDE_TAGS` | `set[str]` | empty set | No | Note eligibility |
+| `ANKI_URL` | `str` | `http://localhost:8765` | No | AnkiConnect HTTP endpoint |
+| `DECK_NAME` | `str` | none | Yes | Insertion, lookup, stats, diagnostics |
+| `LOCAL_VAULT` | `str` | none | Yes | Vault root |
+| `INBOX_FOLDER` | `str` | none | Yes | New-note source |
+| `MAIN_NOTES_FOLDER` | `str` | none | Yes | Processed/migration destination |
+| `MAX_RETRIES_ON_ANKI_DUPLICATE_CARD` | `int` | none | Yes | Additional insertion attempts |
 
 ### `API_KEY`
 
-`API_KEY` is passed directly to the Google Gen AI client:
+Used to construct:
 
-```env
-API_KEY=your_actual_gemini_api_key
+```python
+genai.Client(api_key=settings.API_KEY)
 ```
 
-The key is used for both:
+The same value is passed to `AI.validate_key()` during doctor runtime checks.
 
-- validating the Gemini connection in `obsidian2anki doctor`;
-- generating flashcards during `process` and `migrate`.
-
-A syntactically present but invalid key still allows Pydantic settings construction, but Gemini validation and generation will fail.
+> [!WARNING]
+> `EnvironmentChecker` redacts key-like validation values, but `AI.validate_key()` currently logs the supplied key when it catches `APIError`. Protect the log directory and avoid sharing complete logs.
 
 ### `PROMPT_FILE`
 
-`PROMPT_FILE` selects the text prompt used for card generation:
+Read by:
 
-```env
-PROMPT_FILE=input/prompt.md
+```python
+BASE_DIR / settings.PROMPT_FILE
 ```
 
-The path is resolved relative to the repository root:
+The file is loaded during `AI` construction, not lazily during the first generation call.
 
-```text
-<repository-root>/input/prompt.md
-```
+A missing or unreadable prompt can therefore prevent:
 
-The current AI flow reads the full prompt once when the application is constructed. It then appends a JSON representation of the note containing:
-
-- `title`;
-- `tags`;
-- processed note `content`;
-- existing `anki_cards` metadata.
-
-The note ID and filesystem path are excluded from the model input.
-
-A custom prompt does not need a placeholder such as `{note}`. The note JSON is appended automatically.
-
-Example custom location:
-
-```env
-PROMPT_FILE=input/prompts/programming.md
-```
-
-The corresponding file must exist at:
-
-```text
-<repository-root>/input/prompts/programming.md
-```
-
-> [!WARNING]
-> A missing or unreadable prompt prevents dependency construction. In the current application structure, this can stop commands before their handlers run, including `doctor`.
-
-### Prompt output requirements
-
-Gemini is requested to return structured JSON matching the internal flashcard schema:
-
-```json
-{
-	"cards": [
-		{
-			"question": "...",
-			"answer": "...",
-			"tags": ["..."]
-		}
-	]
-}
-```
-
-Keep custom prompts compatible with this purpose. Avoid asking for Markdown surrounding the JSON, unrelated explanations, or a different object shape.
-
-The model name is currently hardcoded and cannot be selected through `.env`; see [Values not currently configurable](#values-not-currently-configurable).
-
-## Anki Configuration
+- every normal command from finishing application construction;
+- doctor from reaching its runtime table after environment validation succeeds.
 
 ### `ANKI_URL`
 
-`ANKI_URL` is the HTTP endpoint used for every AnkiConnect request:
+Default:
 
-```env
-ANKI_URL=http://localhost:8765/
+```text
+http://localhost:8765
 ```
 
-The standard local AnkiConnect endpoint is expected. Keep the trailing slash or omit it consistently; both normally resolve to the same local server endpoint, but the documented project value includes it.
+The example includes a trailing slash. Requests accepts either form for the local endpoint.
 
-Obsidian2Anki uses AnkiConnect API version `6` and sends JSON requests to this URL.
-
-Commands that depend on Anki include:
-
-- `process`;
-- `migrate`;
-- `clear`;
-- `delete-card`;
-- `delete-note`;
-- `stats`;
-- `doctor`.
-
-Anki should be open with AnkiConnect enabled. The application attempts to find and launch an `anki` executable when Anki is unreachable, but this depends on the executable being available on the system `PATH`.
+The URL is used directly by `requests.post()`.
 
 ### `DECK_NAME`
 
-`DECK_NAME` is the exact deck name used by the application:
+Used for:
 
-```env
-DECK_NAME=Programming
-```
+- default insertion deck;
+- deck existence diagnostics;
+- `findNotes query="deck:<name>"` statistics;
+- automatic deck creation during insertion when absent.
 
-Deck names are matched as strings. Preserve capitalization, spaces, and nested-deck separators exactly.
-
-Nested Anki deck example:
-
-```env
-DECK_NAME=Knowledge::Programming
-```
-
-This setting is used to:
-
-- assign generated notes to the configured deck;
-- locate notes for `stats`;
-- verify deck existence in `doctor`.
-
-The processing code attempts to create the configured deck when it is missing, but `doctor` currently reports a missing deck as a failed check. Creating the deck manually during installation gives the clearest setup and diagnostic result.
-
-### Required Anki note type
-
-The Anki note type is not selected through `.env`. Generated notes currently use the hardcoded model name:
-
-```text
-Basic
-```
-
-That model must expose these fields:
-
-```text
-Front
-Back
-NoteID
-```
-
-`Front` and `Back` exist in Anki's standard Basic note type. `NoteID` must be added manually. Field names are case-sensitive.
-
-## Obsidian Vault Configuration
+The diagnostic command expects the deck to already exist and reports failure otherwise. The insertion path can attempt to create it.
 
 ### `LOCAL_VAULT`
 
-`LOCAL_VAULT` is the root directory of the Obsidian vault:
+Use an absolute path when possible.
+
+Linux/macOS:
 
 ```env
 LOCAL_VAULT=/home/user/Documents/MyVault
 ```
 
-Use an absolute path. The vault manager constructs it directly with `Path(LOCAL_VAULT)`, so a relative value would be resolved against the process working directory rather than reliably against the repository.
-
-Linux:
-
-```env
-LOCAL_VAULT=/home/nika/Documents/MyVault
-```
-
-macOS:
-
-```env
-LOCAL_VAULT=/Users/nika/Documents/MyVault
-```
-
 Windows:
 
 ```env
-LOCAL_VAULT=C:/Users/Nika/Documents/MyVault
+LOCAL_VAULT=C:/Users/User/Documents/MyVault
 ```
 
-Forward slashes are recommended on Windows because they avoid accidental backslash escaping and remain accepted by Python path handling.
-
-Do not include `INBOX_FOLDER` or `MAIN_NOTES_FOLDER` in this value.
-
-Correct:
-
-```env
-LOCAL_VAULT=C:/Users/Nika/Documents/MyVault
-INBOX_FOLDER=00_Inbox
-MAIN_NOTES_FOLDER=01_Notes
-```
-
-Incorrect:
-
-```env
-LOCAL_VAULT=C:/Users/Nika/Documents/MyVault/00_Inbox
-```
+Forward slashes reduce escaping problems in `.env` files on Windows.
 
 ### `INBOX_FOLDER`
 
-`INBOX_FOLDER` is resolved inside `LOCAL_VAULT` and is read by normal processing:
+Resolved as:
 
-```env
-INBOX_FOLDER=00_Inbox
+```python
+Path(LOCAL_VAULT) / INBOX_FOLDER
 ```
 
-Resolved path:
-
-```text
-<LOCAL_VAULT>/00_Inbox
-```
-
-`obsidian2anki process` reads immediate files from this folder. After a note is processed successfully, its metadata is updated and the file is moved to `MAIN_NOTES_FOLDER`.
-
-Nested vault-relative folders are allowed when the directory already exists:
-
-```env
-INBOX_FOLDER=Flashcards/Inbox
-```
+`process` recursively reads `.md` files below this folder.
 
 ### `MAIN_NOTES_FOLDER`
 
-`MAIN_NOTES_FOLDER` is also resolved inside the vault:
+Resolved relative to the vault.
 
-```env
-MAIN_NOTES_FOLDER=01_Notes
-```
+Used by:
 
-Resolved path:
+- destination movement after inbox processing;
+- recursive migration discovery;
+- immediate-only formatting and statistics scans.
 
-```text
-<LOCAL_VAULT>/01_Notes
-```
-
-It serves two roles:
-
-1. destination for successfully processed inbox notes;
-2. source directory scanned by `obsidian2anki migrate` and `format-notes`.
-
-The folder must already exist before processing because the current vault manager does not create vault folders automatically.
-
-### Folder-scanning behavior
-
-The current implementation:
-
-- scans only immediate directory entries;
-- does not recurse into nested directories;
-- processes every immediate regular file;
-- does not currently filter files by the `.md` extension.
-
-Keep unrelated files out of the configured inbox and main-notes directories.
-
-Folder names and path capitalization must match the filesystem exactly on case-sensitive systems.
-
-## State Configuration
+The folder must already exist. `VaultManager._move_to()` does not create it.
 
 ### `STATE_FOLDER`
 
-`STATE_FOLDER` controls where Obsidian2Anki stores its local processing state:
-
-```env
-STATE_FOLDER=data
-```
-
-This path is resolved relative to the repository root:
-
-```text
-<repository-root>/data/state.json
-```
-
-The updated `StateManager` automatically performs both initialization steps:
+Normal application construction resolves:
 
 ```python
-self.state_folder.mkdir(parents=True, exist_ok=True)
-self.state_file.touch(exist_ok=True)
+BASE_DIR / STATE_FOLDER
 ```
 
-Therefore:
+and creates the directory recursively.
 
-- the configured state directory is created when missing;
-- missing parent directories are created;
-- `state.json` is created when missing;
-- an empty `state.json` is loaded as an empty state.
-
-No manual `mkdir`, `touch`, or `{}` initialization is required.
-
-Custom example:
-
-```env
-STATE_FOLDER=.obsidian2anki/state
-```
-
-Resolved path:
-
-```text
-<repository-root>/.obsidian2anki/state/state.json
-```
-
-The repository directory must be writable by the current user.
-
-### What state stores
-
-Each processed note is indexed by its YAML `id`. Its state entry includes:
-
-- note title;
-- absolute vault path;
-- SHA-256 hash of processed note content;
-- generated Anki note IDs;
-- card count;
-- processing timestamp;
-- update timestamp.
-
-This state allows migration to skip unchanged notes and enables delete and clear operations to connect Obsidian notes with generated Anki notes.
-
-> [!CAUTION]
-> Do not edit or delete `state.json` casually. Losing it breaks the application's record of which Anki notes belong to which Obsidian notes. Back it up together with the vault before destructive maintenance.
-
-### State filename
-
-Only the directory is configurable. The filename is currently fixed as:
-
-```text
-state.json
-```
-
-## Tag Filtering
+Doctor resolves the same path but only checks it; doctor does not create it because it does not construct `StateManager`.
 
 ### `INCLUDE_TAGS`
 
-`INCLUDE_TAGS` is an allowlist:
+Recommended syntax:
 
 ```env
 INCLUDE_TAGS=["Python", "JavaScript"]
 ```
 
-Behavior:
-
-- `[]` allows every note that is not excluded;
-- a non-empty list requires at least one exact matching note tag.
-
-The matching rule is **any**, not all. A note tagged only with `Python` passes the example above even though it does not contain `JavaScript`.
+An empty set accepts any note that is not excluded.
 
 ### `EXCLUDE_TAGS`
 
-`EXCLUDE_TAGS` is a denylist:
+Recommended syntax:
 
 ```env
 EXCLUDE_TAGS=["Draft", "Archive"]
 ```
 
-If a note contains any exact excluded tag, it is skipped.
-
-Exclusion takes precedence over inclusion. A note with both `Python` and `Draft` is not processed when using the two examples above.
-
-### Combined logic
-
-A note is eligible only when both conditions are true:
-
-```text
-no note tag appears in EXCLUDE_TAGS
-AND
-INCLUDE_TAGS is empty OR at least one note tag appears in INCLUDE_TAGS
-```
-
-Example configuration:
-
-```env
-INCLUDE_TAGS=["Python", "JavaScript"]
-EXCLUDE_TAGS=["Draft", "Archive"]
-```
-
-| Note tags                 | Result  | Reason                                              |
-| ------------------------- | ------- | --------------------------------------------------- |
-| `Python`                  | Process | Matches an included tag and has no excluded tag.    |
-| `JavaScript`, `Reference` | Process | At least one included tag matches.                  |
-| `React`                   | Skip    | No included tag matches.                            |
-| `Python`, `Draft`         | Skip    | Excluded tags override included tags.               |
-| `Draft`                   | Skip    | Contains an excluded tag.                           |
-| No tags                   | Skip    | The include list is non-empty and no tag can match. |
-
-With both lists empty:
-
-```env
-INCLUDE_TAGS=[]
-EXCLUDE_TAGS=[]
-```
-
-all notes pass the tag filter.
-
-### List syntax
-
-Tag settings must use JSON-array syntax:
-
-```env
-INCLUDE_TAGS=["Python", "React"]
-EXCLUDE_TAGS=["Archive"]
-```
-
-Do not use comma-separated plain text:
-
-```env
-# Invalid for list parsing
-INCLUDE_TAGS=Python,React
-```
-
-Do not remove empty list variables:
-
-```env
-INCLUDE_TAGS=[]
-EXCLUDE_TAGS=[]
-```
-
-### Matching rules
-
-Tag matching is:
-
-- exact;
-- case-sensitive;
-- based on whole strings.
-
-These values are different:
-
-```text
-Python
-python
-#Python
-```
-
-The note parser expects YAML frontmatter `tags` to be a list. For example:
-
-```yaml
----
-id: 5df48ffc-c025-4a52-92ee-394a404f80d0
-tags:
-  - Python
-  - Iterators
----
-```
-
-A non-list `tags` value is currently treated as an empty tag list by the vault parser.
-
-## Anki Insertion Retries
+Any exact matching excluded tag blocks processing.
 
 ### `MAX_RETRIES_ON_ANKI_DUPLICATE_CARD`
 
+Controls the loop after the first unsuccessful `add_cards()` result.
+
+With:
+
 ```env
 MAX_RETRIES_ON_ANKI_DUPLICATE_CARD=3
 ```
 
-The value controls how many times Obsidian2Anki regenerates the flashcard batch and tries Anki insertion again after the initial insertion returns no IDs.
+the code can attempt insertion up to four times total:
 
-With a value of `3`, the maximum sequence is:
+1. initial generation/insertion;
+2. retry 1;
+3. retry 2;
+4. retry 3.
 
-1. initial Gemini generation and Anki insertion;
-2. retry 1 with a newly generated batch;
-3. retry 2 with a newly generated batch;
-4. retry 3 with a newly generated batch.
+Each retry regenerates cards with Gemini. The setting name mentions duplicate cards, but any falsy insertion result enters the same retry path.
 
-Therefore, `3` allows up to **four total insertion attempts**.
+No validation currently prevents zero or negative values. With `0`, only the initial attempt runs.
 
-Set it to zero to disable regeneration retries:
+## Path Resolution
 
-```env
-MAX_RETRIES_ON_ANKI_DUPLICATE_CARD=0
-```
+| Resource | Resolution |
+| --- | --- |
+| `.env` | `BASE_DIR / ".env"` |
+| Prompt | `BASE_DIR / PROMPT_FILE` |
+| State folder | `BASE_DIR / STATE_FOLDER` |
+| State file | `<resolved state folder>/state.json` |
+| Logs | `BASE_DIR / "logs" / "obsidian2anki.log"` |
+| Inbox | `Path(LOCAL_VAULT) / INBOX_FOLDER` |
+| Main folder | `Path(LOCAL_VAULT) / MAIN_NOTES_FOLDER` |
 
-Use a non-negative integer. The current settings model validates the type as `int` but does not define a minimum value.
+With `pathlib`, joining an absolute right-hand path discards the left-hand base. Absolute prompt or state paths therefore work even though the code uses `/` joining.
 
-Despite the variable name, the retry loop is triggered by any falsy result from Anki note insertion, not only a confirmed duplicate-card error.
+### Nested folders
 
-Increasing this value can increase Gemini requests, processing time, and the chance of producing alternative wording for the same note.
-
-## Path-Resolution Rules
-
-Obsidian2Anki does not resolve every path from the same base.
-
-| Setting             | Resolution base                    | Example                       |
-| ------------------- | ---------------------------------- | ----------------------------- |
-| `.env`              | Repository root                    | `<repo>/.env`                 |
-| `PROMPT_FILE`       | Repository root                    | `<repo>/input/prompt.md`      |
-| `STATE_FOLDER`      | Repository root                    | `<repo>/data/state.json`      |
-| `LOCAL_VAULT`       | Used directly as a filesystem path | `/home/user/MyVault`          |
-| `INBOX_FOLDER`      | `LOCAL_VAULT`                      | `/home/user/MyVault/00_Inbox` |
-| `MAIN_NOTES_FOLDER` | `LOCAL_VAULT`                      | `/home/user/MyVault/01_Notes` |
-| Log directory       | Repository root, fixed in code     | `<repo>/logs`                 |
-
-Recommended rules:
-
-1. use repository-relative values for `PROMPT_FILE` and `STATE_FOLDER`;
-2. use an absolute path for `LOCAL_VAULT`;
-3. use vault-relative paths for `INBOX_FOLDER` and `MAIN_NOTES_FOLDER`;
-4. do not begin vault-relative folder settings with the vault path again.
-
-## Environment Examples
-
-### Process every note
+These values may contain separators:
 
 ```env
-INCLUDE_TAGS=[]
-EXCLUDE_TAGS=[]
+INBOX_FOLDER=Learning/Inbox
+MAIN_NOTES_FOLDER=Learning/Notes
 ```
 
-### Process only programming notes
+Process and migration recurse below the resolved roots.
+
+After successful inbox processing, the file is moved to the top level of the configured main folder, not to an equivalent nested path.
+
+## Tag Filtering
+
+The implemented logic is:
+
+```python
+has_no_excluded_tags = not any(
+    tag in note.tags for tag in EXCLUDE_TAGS
+)
+
+has_required_include_tag = not INCLUDE_TAGS or any(
+    tag in note.tags for tag in INCLUDE_TAGS
+)
+
+return has_no_excluded_tags and has_required_include_tag
+```
+
+### Truth table
+
+| Include set | Exclude set | Result |
+| --- | --- | --- |
+| Empty | Empty | Every note passes. |
+| Empty | Non-empty | Notes pass when they contain no excluded tag. |
+| Non-empty | Empty | Notes pass when they contain at least one included tag. |
+| Non-empty | Non-empty | Notes need an included tag and no excluded tag. |
+
+### Matching rules
+
+- exact string equality;
+- case-sensitive;
+- no leading `#` normalization during normal note parsing;
+- no hierarchical tag expansion;
+- no wildcard or regular-expression support.
+
+Use the same spelling and capitalization as YAML frontmatter.
+
+### YAML tag shape
+
+Only a parsed list is accepted by `_process_file()`:
+
+```yaml
+tags:
+  - Python
+  - Algorithms
+```
+
+These forms are not treated as tag lists by the current code:
+
+```yaml
+tags: Python
+```
+
+```yaml
+tags: "Python, Algorithms"
+```
+
+They become an empty `VaultNote.tags` list.
+
+## Anki Requirements
+
+### Endpoint
+
+Anki Desktop must expose AnkiConnect at `ANKI_URL`.
+
+`anki_running()` uses a one-second timeout. Other actions through `connect()` have no explicit timeout.
+
+### Deck
+
+`DECK_NAME` may be a nested Anki deck name such as:
 
 ```env
-INCLUDE_TAGS=["Python", "JavaScript", "React", "CSS"]
-EXCLUDE_TAGS=[]
+DECK_NAME=Programming::Python
 ```
 
-### Process programming notes except drafts
+The value is inserted directly into AnkiConnect queries and payloads.
 
-```env
-INCLUDE_TAGS=["Python", "JavaScript", "React", "CSS"]
-EXCLUDE_TAGS=["Draft", "Archive", "Ignore"]
-```
+### Note type and fields
 
-### Use nested vault folders
-
-```env
-LOCAL_VAULT=/home/user/Documents/Knowledge
-INBOX_FOLDER=Flashcards/Inbox
-MAIN_NOTES_FOLDER=Flashcards/Notes
-```
-
-Both nested directories must already exist.
-
-### Keep state in a hidden project directory
-
-```env
-STATE_FOLDER=.local/obsidian2anki
-```
-
-This creates:
+The current code always sends:
 
 ```text
-<repository-root>/.local/obsidian2anki/state.json
+modelName = Basic
+fields = Front, Back, NoteID
 ```
 
-Review `.gitignore` before choosing a custom state path. The state file should not be committed.
+Add `NoteID` to the `Basic` note type before processing.
 
-### Use a nested Anki deck
+The model name and field mapping are not configurable.
+
+## Prompt and Model Configuration
+
+### Bundled prompt
+
+Default example:
 
 ```env
-DECK_NAME=Knowledge::Computer Science::Python
-```
-
-### Windows example
-
-```env
-API_KEY=your_gemini_api_key
 PROMPT_FILE=input/prompt.md
-
-ANKI_URL=http://localhost:8765/
-DECK_NAME=Programming
-
-LOCAL_VAULT=C:/Users/Nika/Documents/MyVault
-INBOX_FOLDER=00_Inbox
-MAIN_NOTES_FOLDER=01_Notes
-
-STATE_FOLDER=data
-
-INCLUDE_TAGS=["Python", "JavaScript"]
-EXCLUDE_TAGS=["Draft", "Archive"]
-
-MAX_RETRIES_ON_ANKI_DUPLICATE_CARD=3
 ```
 
-## Values Not Currently Configurable
+The prompt asks for important concepts, concise answers, unique ideas, and one to five cards.
 
-The following behavior is fixed in source code in version `0.1.0`:
-
-| Behavior                   | Current value or rule                   | Source area               |
-| -------------------------- | --------------------------------------- | ------------------------- |
-| Gemini model               | `gemini-3.1-flash-lite`                 | `core/ai.py`              |
-| Initial Gemini retry delay | `7` seconds                             | `AI.__init__`             |
-| Maximum Gemini retry delay | `60` seconds                            | `AI.generate_note_cards`  |
-| Gemini retry pattern       | Doubles after each caught `ClientError` | `core/ai.py`              |
-| AnkiConnect API version    | `6`                                     | `utils/anki_connecter.py` |
-| Anki note type             | `Basic`                                 | `models.py`               |
-| Anki fields                | `Front`, `Back`, `NoteID`               | `AnkiCard.serialize`      |
-| State filename             | `state.json`                            | `core/state_manager.py`   |
-| Log directory              | `<repository-root>/logs`                | `utils/logger.py`         |
-| Log filename               | `obsidian2anki.log`                     | `utils/logger.py`         |
-| Log rotation               | 5 MiB, three backups                    | `utils/logger.py`         |
-| Vault scan depth           | Immediate files only                    | `core/vault_manager.py`   |
-| Input extension filter     | None                                    | `core/vault_manager.py`   |
-
-Changing these behaviors currently requires a source-code change rather than an `.env` update.
-
-## Validation and Startup Behavior
-
-### All settings load together
-
-The `Settings` class contains every variable without a Python default. Pydantic validates them as one configuration object.
-
-A missing value can produce a validation error similar to:
+The current prompt also contains the contradictory line:
 
 ```text
-Field required
+Preserve the language of the note. Write On English!!!
 ```
 
-Keep every key from `.env.example`, even when a list is intentionally empty.
+Resolve that instruction according to the intended product behavior.
 
-### Settings are cached
+### Request payload
 
-`get_settings()` is decorated with `lru_cache`, and several modules obtain settings at import time. As a result:
+The model receives:
 
-- one CLI invocation uses one stable settings object;
-- editing `.env` does not alter a process that is already running;
-- rerun the command after changing `.env`.
+- prompt text;
+- note title;
+- note tags;
+- normalized note content.
 
-Normal CLI use starts a fresh process, so no manual cache clearing is needed between separate commands.
+It does not receive frontmatter ID, local file path, or existing generated IDs.
 
-### Dependency construction happens early
+### Hard-coded values
 
-The application constructs the vault manager, Anki manager, state manager, AI client, and services before dispatching the selected command.
+Not currently configurable:
 
-Consequences include:
+- Gemini model: `gemini-3.1-flash-lite`;
+- generation temperature or safety settings;
+- card-count constraints in the schema;
+- retryable Gemini exception categories;
+- Gemini retry limit;
+- Anki model name;
+- Anki field mapping.
 
-- `.env` must be complete before normal CLI use;
-- `PROMPT_FILE` must exist and be readable;
-- `STATE_FOLDER` must point to a writable location;
-- an incomplete configuration may fail before `doctor` can report its table.
+## State Configuration
 
-### Verify configuration
+### Automatic initialization
 
-After editing `.env`, run:
+Normal app construction runs:
 
-```bash
-obsidian2anki doctor
+```python
+state_folder.mkdir(parents=True, exist_ok=True)
+state_file.touch(exist_ok=True)
 ```
 
-For additional logs:
+An empty state file is loaded as an empty dictionary.
 
-```bash
-obsidian2anki --verbose doctor
+### Stored shape
+
+```json
+{
+  "9fb66ee5-6778-4bf4-817d-f82646d1237e": {
+    "title": "Iterators",
+    "path": "/absolute/path/01_Notes/Iterators.md",
+    "content_hash": "...",
+    "card_count": 2,
+    "anki_note_ids": [1749920000001, 1749920000002],
+    "processed_at": "2026-08-02T10:00:00+00:00",
+    "updated_at": "2026-08-02T10:00:00+00:00"
+  }
+}
 ```
 
-The diagnostic command checks the Python version, `.env`, vault paths, state folder, API key, prompt file, deck, and Anki connectivity.
+### Current persistence behavior
 
-Because the AI client and settings are constructed before diagnostics, use Pydantic error output and the troubleshooting section below when `doctor` cannot start.
+- full JSON file rewrite;
+- four-space indentation;
+- Unicode preserved;
+- no file lock;
+- no temporary-file atomic replace;
+- no automatic backup;
+- no schema version;
+- invalid JSON raises during construction.
 
-## Security Guidance
+### Doctor distinction
 
-### Protect `API_KEY`
+Doctor checks the configured state folder path without creating or loading state.
+
+This makes it useful for reporting a missing state folder, but a brand-new installation may show a failed state row until a normal command constructs `StateManager` or the directory is created manually.
+
+## Validation and Caching
+
+### Required settings
+
+Fields with no default must be provided by `.env` or the process environment. Missing fields produce Pydantic errors.
+
+### Extra settings
+
+The settings model does not explicitly override Pydantic's extra-field policy in code. Diagnostics can normalize `extra_forbidden` errors when they occur.
+
+### Cache
+
+After `get_settings()` succeeds, later calls in the same process return the cached object. Editing `.env` during a running process has no effect.
+
+Tests that modify environment variables should call:
+
+```python
+get_settings.cache_clear()
+```
+
+before loading again.
+
+### Eager consumers
+
+Normal `Dependencies` constructs objects that call `get_settings()` internally. This duplicates settings access across classes but returns the same cached model.
+
+## Doctor Behavior
+
+Environment validation runs before normal application construction.
+
+### Missing or invalid settings
+
+Doctor prints a normalized environment table and returns. Sensitive-looking fields are redacted.
+
+### Valid settings
+
+Doctor then constructs `AnkiManager` and `AI`, followed by runtime checks.
+
+### What doctor can validate
+
+- Python version;
+- `.env` file presence;
+- vault and configured folders;
+- state folder;
+- prompt file;
+- Gemini API access;
+- Anki connectivity;
+- deck presence.
+
+### What doctor does not validate
+
+- note frontmatter quality;
+- unique note IDs;
+- Anki field schema;
+- state JSON validity;
+- state/vault/Anki consistency;
+- prompt quality;
+- successful generation with the hard-coded model;
+- logs directory writability;
+- retry-count range.
+
+See [Diagnostics](diagnostics.md).
+
+## Security
 
 - Keep `.env` out of version control.
-- Never place the real key in `.env.example`.
-- Do not paste `.env` into public issues or screenshots.
-- Rotate the key immediately if it is exposed.
-
-> [!WARNING]
-> In the current implementation, failed API-key validation logs the supplied invalid key value. Treat `logs/obsidian2anki.log` and its rotated backups as sensitive. Do not upload them publicly without reviewing and redacting secrets.
-
-### Protect local state
-
-`state.json` contains absolute note paths and Anki note IDs. It does not contain the Gemini key, but it can expose local filesystem structure and should remain private.
-
-### Review custom prompts
-
-A custom prompt is combined with the content of every processed note. Do not process confidential notes unless sending their content to the configured AI service is acceptable.
+- Restrict access to `logs/` because current API-key failure logging can expose the key.
+- Treat `state.json` as private metadata; it contains absolute paths and Anki IDs.
+- Review notes before sending them to Gemini.
+- Do not put secrets in the prompt or eligible note bodies.
+- Remove API keys, local paths, state data, and note content from issue reports.
 
 ## Troubleshooting
 
 ### `.env` is ignored
 
-Confirm that the file is named exactly:
+Confirm it is at repository root, the same location as `pyproject.toml`, or set environment variables directly.
 
-```text
-.env
-```
+### Missing-field table
 
-and is stored beside `pyproject.toml`, not inside `src/`, `docs/`, or the vault.
+Provide the exact field named in **Environment Results**. Remember that `ANKI_URL`, `INCLUDE_TAGS`, and `EXCLUDE_TAGS` have defaults; other model fields do not.
 
-### Pydantic reports missing fields
+### Tag list fails to parse
 
-Compare `.env` against `.env.example`. All of these keys must exist:
-
-```text
-API_KEY
-PROMPT_FILE
-ANKI_URL
-DECK_NAME
-LOCAL_VAULT
-INBOX_FOLDER
-MAIN_NOTES_FOLDER
-STATE_FOLDER
-INCLUDE_TAGS
-EXCLUDE_TAGS
-MAX_RETRIES_ON_ANKI_DUPLICATE_CARD
-```
-
-Use `[]` for intentionally empty tag lists.
-
-### A tag list cannot be parsed
-
-Use valid JSON arrays with double-quoted strings:
+Use JSON array syntax:
 
 ```env
-INCLUDE_TAGS=["Python", "React"]
+INCLUDE_TAGS=["Python", "Math"]
 ```
 
-Do not use Python set syntax, YAML list syntax, or an unquoted comma-separated string.
+### No notes pass filtering
 
-### No notes pass the tag filter
+Check exact case and YAML-list structure. An excluded tag always blocks the note.
 
-Check all of the following:
+### Prompt file is missing
 
-- note frontmatter stores `tags` as a YAML list;
-- capitalization matches `.env` exactly;
-- no tag appears in `EXCLUDE_TAGS`;
-- at least one tag appears in `INCLUDE_TAGS` when that list is non-empty;
-- note tags do not include a leading `#` unless the `.env` value also includes it.
+Resolve the path relative to the repository root. Doctor may fail before displaying the runtime table because AI construction reads the prompt immediately.
 
-Temporarily disable filters to isolate the problem:
+### Vault folder is missing
 
-```env
-INCLUDE_TAGS=[]
-EXCLUDE_TAGS=[]
-```
+Create both configured subfolders. Process/migrate log a missing root and return no notes; other services may raise when they directly call `.iterdir()`.
 
-### The prompt file is not found
+### State folder fails in doctor
 
-`PROMPT_FILE` is repository-relative, not relative to the current terminal directory.
+Doctor does not create it. Create it manually or run a normal command after the rest of configuration is valid.
 
-For:
+### State JSON is malformed
 
-```env
-PROMPT_FILE=input/prompt.md
-```
+Back up the file, repair valid JSON and required fields, or deliberately reset it only when you understand the synchronization consequences.
 
-verify:
+### Anki rejects fields
 
-```text
-<repository-root>/input/prompt.md
-```
+Add `NoteID` to `Basic` with exact capitalization.
 
-### The vault is not found
+### Too many AI requests
 
-Use an absolute `LOCAL_VAULT` path and confirm the directory exists.
-
-Do not wrap the value in mismatched quotes. On Windows, prefer forward slashes.
-
-### The inbox or main folder is not found
-
-These folders are resolved below the vault root and are not created automatically.
-
-For:
-
-```env
-LOCAL_VAULT=/home/user/MyVault
-INBOX_FOLDER=00_Inbox
-MAIN_NOTES_FOLDER=01_Notes
-```
-
-create:
-
-```text
-/home/user/MyVault/00_Inbox
-/home/user/MyVault/01_Notes
-```
-
-### The state directory cannot be created
-
-`StateManager` creates the configured directory automatically. A failure usually means:
-
-- the repository path is not writable;
-- `STATE_FOLDER` points into a protected location;
-- a regular file already occupies one of the directory path components;
-- the configured path is invalid for the operating system.
-
-### `state.json` contains invalid JSON
-
-An empty file is accepted, but a non-empty file must contain valid JSON matching the state schema.
-
-Restore a known-good backup. Do not replace the file with `{}` unless you intentionally accept losing all processing relationships.
-
-### Anki is unreachable
-
-Check:
-
-```env
-ANKI_URL=http://localhost:8765/
-```
-
-Then verify that Anki is open and AnkiConnect is enabled.
-
-### The deck check fails
-
-Ensure `DECK_NAME` matches the Anki deck exactly. Check spaces, capitalization, and `::` separators for nested decks.
-
-### Anki reports an unknown field
-
-The current note model sends `Front`, `Back`, and `NoteID`. Add `NoteID` to the Anki `Basic` note type and restart or reopen the relevant Anki screens.
-
-### Too many Gemini requests occur
-
-Lower:
-
-```env
-MAX_RETRIES_ON_ANKI_DUPLICATE_CARD=1
-```
-
-or disable insertion regeneration retries:
-
-```env
-MAX_RETRIES_ON_ANKI_DUPLICATE_CARD=0
-```
-
-This setting does not control the separate Gemini `ClientError` retry loop, whose delay behavior is currently fixed in source code.
-
-## Next Step
-
-After configuration is valid, continue with the workflow documentation to understand how inbox processing, migration, state tracking, metadata updates, and Anki synchronization work together.
+Each unsuccessful Anki insertion can cause full regeneration, and Gemini `ClientError` retries are unbounded. Inspect logs before retrying the entire command.
