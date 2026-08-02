@@ -6,7 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- Added the dedicated `obsidian2anki.diagnostics` package with separate doctor orchestration, environment checking, runtime checking, renderable result models, Rich column factories, and a generic table output manager.
+- Added normalized **Environment Results** rows for Pydantic settings errors, including field, error type, validation location, message, and safely rendered input value.
+- Added sensitive-value redaction for environment fields whose names contain `key`, `token`, `secret`, or `password`.
+- Added `docs/diagnostics.md` and refreshed the complete documentation set against the current implementation.
+
+### Changed
+
+- Refactored `doctor` out of the normal `Obsidian2Anki` facade and application dependency container.
+- Routed `doctor` directly from `main.py` before `build_app()`, allowing missing or invalid settings to be displayed without constructing state, AI, and workflow services first.
+- Split diagnostics into an environment-validation phase and a runtime-check phase.
+- Changed runtime output from the previous single result representation to typed `AppRuntimeCheck` rows rendered by `OutputManager`.
+- Changed Anki deck diagnostics to produce an explicit skipped failure row when Anki is unreachable.
+- Updated architecture, CLI, workflow, installation, configuration, AI, README, changelog, and roadmap documentation to distinguish the doctor startup path from normal command startup.
+
+### Security
+
+- Environment validation output no longer displays raw values for secret-like field names.
+
+### Known Follow-up Work
+
+- `AI.validate_key()` still logs the supplied API key on `APIError` and must be redacted separately.
+- `AI` still reads the prompt before runtime checks are assembled, so a missing prompt can escape before the diagnostic prompt row is printed.
+- Diagnostic failures still return process status `0` when no exception escapes.
 
 ## [0.1.0] - 2026-07-25
 
