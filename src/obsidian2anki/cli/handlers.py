@@ -1,5 +1,5 @@
-from typing import NewType
 from collections.abc import Callable
+from typing import NewType
 
 NoteId = NewType("NoteId", str)
 CardId = NewType("CardId", int)

@@ -1,11 +1,8 @@
 from collections.abc import Callable
 from argparse import Namespace
 
-from obsidian2anki.cli.commands import (
-    CommandDefinition,
-    APP_COMMANDS,
-)
 from obsidian2anki.cli.handlers import CommandHandler, ArgCommandHandler, ArgTypes
+from obsidian2anki.cli.commands import CommandDefinition, APP_COMMANDS
 from obsidian2anki.app.app import Obsidian2Anki
 
 

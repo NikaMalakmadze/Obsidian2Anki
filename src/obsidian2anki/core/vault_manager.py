@@ -4,9 +4,9 @@ import frontmatter
 import logging
 import uuid
 
+from obsidian2anki.constants import VAULT_NOTE_NECESSARY_PROPERTIES
 from obsidian2anki.exceptions import ObsidianFolderDoesNotExists
 from obsidian2anki.utils.helpers import process_note_content
-from obsidian2anki import VAULT_NOTE_NECESSARY_PROPERTIES
 from obsidian2anki.config import get_settings, Settings
 from obsidian2anki.models import VaultNote
 
