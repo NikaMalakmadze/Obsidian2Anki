@@ -97,6 +97,7 @@ class StateManager:
             curr_datetime: str = datetime.now(UTC).isoformat()
             note_info.updated_at = curr_datetime
             note_info.anki_note_ids.remove(card_id)
+            note_info.card_count -= 1
             note_id = id
 
         if note_id:
@@ -117,6 +118,24 @@ class StateManager:
         self.save()
 
         return True
+
+    def delete_old_cards(self, note_id: str, old_cards: list[int]) -> list[int] | None:
+        note: StateNote | None = self._state.get(note_id)
+        if not note:
+            return None
+
+        curr_datetime: str = datetime.now(UTC).isoformat()
+        note.updated_at = curr_datetime
+
+        filtered_note_ids: list[int] = [
+            id for id in note.anki_note_ids if id not in old_cards
+        ]
+        note.anki_note_ids = filtered_note_ids
+
+        self._is_changed = True
+        self.save()
+
+        return filtered_note_ids
 
     def save(self) -> None:
         if not self._is_changed:
