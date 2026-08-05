@@ -51,18 +51,11 @@ class NoteProcessor:
         try:
             if not note.content:
                 logger.info(
-                    "No Content Found in note with id: '%s'.",
+                    "No content found in note with id: '%s'.",
                     note.id,
                 )
                 return True
 
-            if note.anki_cards:
-                self.delete_note_cards(note.id, note.anki_cards)
-                logger.info(
-                    "Deleted %d cards of note with id: '%s'.",
-                    len(note.anki_cards),
-                    note.id,
-                )
             flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
 
             logger.info(
@@ -103,7 +96,16 @@ class NoteProcessor:
                 )
                 return False
 
+            if note.anki_cards:
+                self.delete_old_cards(note.id, note.anki_cards)
+                logger.info(
+                    "Deleted %d cards of note with id: '%s'.",
+                    len(note.anki_cards),
+                    note.id,
+                )
+
             self._vault.write_metadata(note, ids)
+            self._vault.move_to(note, self.settings.MAIN_NOTES_FOLDER)
             self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
 
             logger.info("Processed note with id: '%s'.", note.id)
@@ -112,10 +114,16 @@ class NoteProcessor:
             logger.exception("Failed processing note with id '%s'.", note.id)
             return False
 
-    def delete_note_cards(self, note_id: str, card_ids: list[int]) -> None:
+    def delete_old_cards(self, note_id: str, old_card_ids: list[int]) -> None:
         """Deletes all flash cards of note with given id"""
-        self._state.delete_note_cards(note_id)
+        current_cards: list[int] | None = self._state.delete_old_cards(
+            note_id, old_card_ids
+        )
         note_path: Path = Path(self._state.get_property_of(note_id, "path"))
-        self._vault.remove_property(note_path)
-        for card_id in card_ids:
+
+        if not current_cards:
+            self._vault.remove_property(note_path)
+
+        for card_id in old_card_ids:
             self._anki.delete_card(card_id)
+            self._vault.remove_list_item(note_path, "anki_cards", str(card_id))
