@@ -31,22 +31,20 @@ class VaultManager:
                 "Folder with path: '%s' does not exists", folder_path.resolve()
             )
 
-    def remove_property(self, file: Path, property: str = "anki_cards") -> None:
-        note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
+    def remove_property(self, note_path: Path, property: str = "anki_cards") -> None:
+        frontmatter_post: Post = self._get_frontmatter(note_path)
 
-        if property in note:
-            del note[property]
+        if property in frontmatter_post:
+            del frontmatter_post[property]
 
-        file.write_text(
-            frontmatter.dumps(note).replace("\n\n", "\n", 1), encoding="utf-8"
-        )
+        self._write_frontmatter(note_path, frontmatter_post)
 
     def remove_list_item(
-        self, file: Path, list_name: str, item: str
+        self, note_path: Path, list_name: str, item: str
     ) -> list[str] | None:
-        note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
+        frontmatter_post: Post = self._get_frontmatter(note_path)
 
-        note_list_property: str = note.get(list_name, "")
+        note_list_property: str = frontmatter_post.get(list_name, "")
 
         if not note_list_property:
             return
@@ -56,53 +54,58 @@ class VaultManager:
             note_list.remove(item.strip())
 
         if not note_list:
-            return self.remove_property(file)
+            return self.remove_property(note_path)
 
-        note[list_name] = ", ".join(note_list)
+        frontmatter_post[list_name] = ", ".join(note_list)
 
-        file.write_text(frontmatter.dumps(note), encoding="utf-8")
+        self._write_frontmatter(note_path, frontmatter_post)
 
         return note_list
 
     def write_metadata(self, note: VaultNote, flash_card_ids: list[int]) -> None:
-        file: Path = Path(note.path)
+        note_path: Path = Path(note.path)
 
-        lines: list[str] = file.read_text(encoding="utf-8").splitlines()
+        old_frontmatter_post: Post = self._get_frontmatter(note_path)
 
-        lines.insert(2, f"anki_cards: {', '.join(map(str, flash_card_ids))}")
+        metadata = {
+            "id": old_frontmatter_post.get("id", f"{uuid.uuid4()!s}"),
+            "tags": old_frontmatter_post.get("tags", []),
+            "anki_cards": ", ".join(map(str, flash_card_ids)),
+        }
 
-        file.write_text("\n".join(lines), encoding="utf-8")
-
-        self._move_to(note, file, self.settings.MAIN_NOTES_FOLDER)
+        new_frontmatter_post: Post = frontmatter.Post(
+            content=old_frontmatter_post.content, **metadata
+        )
+        self._write_frontmatter(note_path, new_frontmatter_post)
 
     def ensure_note_format(self, note_path: Path) -> None:
-        lines: list[str] = note_path.read_text(encoding="utf-8").splitlines()
+        note_content_lines: list[str] = note_path.read_text(
+            encoding="utf-8"
+        ).splitlines()
+        tags_line: str = note_content_lines.pop(0)
+        tags: list[str] = [tag.removeprefix("#") for tag in tags_line.split()]
 
-        tags: list[str] = [tag.removeprefix("#") for tag in lines.pop(0).split()]
+        metadata: dict[str, str] = {
+            "id": f"{uuid.uuid4()!s}",
+            "tags": tags,
+        }
 
-        new_content: list[str] = [
-            "---",
-            f"id: {uuid.uuid4()!s}",
-            "tags:",
-            *[f"  - {tag}" for tag in tags],
-            "---",
-        ] + lines
+        frontmatter_post: Post = frontmatter.Post(
+            content="\n".join(note_content_lines), **metadata
+        )
 
-        note_path.write_text("\n".join(new_content), encoding="utf-8")
+        self._write_frontmatter(note_path, frontmatter_post)
 
     def has_metadata(self, note_path: Path) -> bool:
-        note: Post = frontmatter.loads(note_path.read_text(encoding="utf-8"))
-        note_keys: list[str] = list(note.keys())
+        frontmatter_post: Post = self._get_frontmatter(note_path)
+        note_keys: list[str] = list(frontmatter_post.keys())
         return all(
             needed_property in note_keys for needed_property in self.note_properties
         )
 
-    def _move_to(
-        self, note: VaultNote, note_file: Path, destination_folder: str
-    ) -> None:
-        destination_folder_path: Path = (
-            Path(self.settings.LOCAL_VAULT) / destination_folder
-        )
+    def move_to(self, note: VaultNote, destination_folder: str) -> None:
+        destination_folder_path: Path = self.root / destination_folder
+        note_file: Path = Path(note.path)
         note_path_str: str = str((destination_folder_path / note_file.name).resolve())
 
         if note.path != note_path_str:
@@ -125,15 +128,10 @@ class VaultManager:
                 notes.append(self._process_file(item))
         return notes
 
-    @staticmethod
-    def _is_md(item: Path) -> bool:
-        return item.is_file() and item.suffix == ".md"
+    def _process_file(self, note_path: Path) -> VaultNote:
+        frontmatter_post: Post = self._get_frontmatter(note_path)
 
-    @staticmethod
-    def _process_file(file: Path) -> VaultNote:
-        note: Post = frontmatter.loads(file.read_text(encoding="utf-8"))
-
-        anki_cards_property: int | str | list = note.get("anki_cards", [])
+        anki_cards_property: int | str | list = frontmatter_post.get("anki_cards", [])
 
         if isinstance(anki_cards_property, int):
             anki_cards = [anki_cards_property]
@@ -145,10 +143,26 @@ class VaultManager:
             anki_cards = []
 
         return VaultNote(
-            id=note["id"],
-            title=file.name.split(".")[0],
-            tags=note.get("tags") if isinstance(note.get("tags"), list) else [],
-            content=process_note_content(note.content.replace("\n", " ")),
-            path=str(file.resolve()),
+            id=frontmatter_post["id"],
+            title=note_path.name.split(".")[0],
+            tags=frontmatter_post.get("tags")
+            if isinstance(frontmatter_post.get("tags"), list)
+            else [],
+            content=process_note_content(frontmatter_post.content.replace("\n", " ")),
+            path=str(note_path.resolve()),
             anki_cards=anki_cards,
         )
+
+    @staticmethod
+    def _is_md(item: Path) -> bool:
+        return item.is_file() and item.suffix == ".md"
+
+    @staticmethod
+    def _get_frontmatter(note_path: Path) -> Post:
+        return frontmatter.loads(note_path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _write_frontmatter(note_path: Path, frontmatter_post: Post) -> None:
+        serialized_note = frontmatter.dumps(frontmatter_post, sort_keys=False)
+        serialized_note = serialized_note.replace("---\n\n", "---\n", 1)
+        note_path.write_text(serialized_note, encoding="utf-8")
