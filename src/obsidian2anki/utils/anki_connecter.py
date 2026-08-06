@@ -6,7 +6,12 @@ import logging
 import shutil
 import time
 
-from obsidian2anki.exceptions import AnkiValidationException
+from obsidian2anki.exceptions import (
+    AnkiActionError,
+    AnkiConnectionError,
+    AnkiDuplicateNoteError,
+    AnkiResponseError,
+)
 from obsidian2anki.config import get_settings, Settings
 from obsidian2anki.utils.type import Action
 
@@ -23,16 +28,23 @@ class AnkiConnecter:
         if not self.anki_running():
             self.open_anki()
 
+        payload = {"action": action, "version": 6, "params": params}
         try:
-            payload = {"action": action, "version": 6, "params": params}
             response = requests.post(self.anki_url, json=payload)
             response.raise_for_status()
-            result = response.json()
-            self._validate_res(result)
-            return result["result"]
-        except (requests.RequestException, AnkiValidationException):
-            logger.exception("Could not connect to Anki. Is the Anki application open?")
-            return None
+        except requests.RequestException as exc:
+            raise AnkiConnectionError(
+                f"Could not reach AnkiConnect at {self.anki_url}."
+            ) from exc
+
+        try:
+            response_data = response.json()
+        except requests.JSONDecodeError as exc:
+            raise AnkiResponseError("AnkiConnect returned invalid JSON.") from exc
+
+        self._validate_res(response_data)
+
+        return response_data["result"]
 
     def anki_running(self) -> bool:
         logger.debug("Trying to connect with anki.")
@@ -80,14 +92,22 @@ class AnkiConnecter:
             logger.exception("Invalid Params.")
 
     @staticmethod
-    def _validate_res(res: dict[str, Any]) -> None:
-        if len(res) != 2:
-            raise AnkiValidationException(
-                "Response has an unexpected number of fields."
+    def _validate_res(res: Any) -> None:
+        if not isinstance(res, dict):
+            raise AnkiResponseError(
+                f"Expected a dictionary response, got {type(res).__name__}."
             )
-        if "error" not in res:
-            raise AnkiValidationException("Response is missing required error field.")
-        if "result" not in res:
-            raise AnkiValidationException("Response is missing required result field.")
-        if res["error"] is not None:
-            raise AnkiValidationException(res["error"])
+        if set(res.keys()) != {"result", "error"}:
+            raise AnkiResponseError(
+                "Response must contain exactly 'result' and 'error'."
+            )
+
+        error = res["error"]
+        if error is None:
+            return
+
+        error_message: str = str(error)
+        if "cannot create note because it is a duplicate" in error_message.lower():
+            raise AnkiDuplicateNoteError(error_message)
+
+        raise AnkiActionError(error_message)
