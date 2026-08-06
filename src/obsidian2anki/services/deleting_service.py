@@ -29,8 +29,11 @@ class DeletingService:
             return
 
         note_path: Path = Path(self._state.get_property_of(note_id, "path"))
-
         self._anki.delete_card(card_id)
+
+        if not note_path.is_file():
+            return
+
         ids_list: list[str] | None = self._vault.remove_list_item(
             note_path, "anki_cards", str(card_id)
         )
@@ -47,6 +50,9 @@ class DeletingService:
         for note_card in note_cards:
             self._anki.delete_card(note_card)
 
-        self._vault.remove_property(note_path)
-
         self._state.delete_state_item(note_id)
+
+        if not note_path.is_file():
+            return
+
+        self._vault.remove_property(note_path)
