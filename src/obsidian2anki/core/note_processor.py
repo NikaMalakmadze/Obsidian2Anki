@@ -1,6 +1,10 @@
 from pathlib import Path
 import logging
 
+from obsidian2anki.exceptions import (
+    AnkiDuplicateNoteError,
+    AnkiError,
+)
 from obsidian2anki.models import Flashcard, NoteInfo, VaultNote
 from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.state_manager import StateManager
@@ -56,44 +60,9 @@ class NoteProcessor:
                 )
                 return True
 
-            flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
+            card_ids: list[int] | None = self._try_create_cards(note)
 
-            logger.info(
-                "Generated %d flash cards for note with id: '%s'.",
-                len(flash_cards),
-                note.id,
-            )
-
-            ids: list[int] | None = self._anki.add_cards(note.id, flash_cards)
-
-            tries: int = 0
-
-            while not ids and tries < self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD:
-                tries += 1
-
-                logger.warning(
-                    "Failed to add cards for note '%s'. Retrying (%d/%d).",
-                    note.id,
-                    tries,
-                    self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
-                )
-
-                flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
-
-                logger.info(
-                    "Regenerated %d flash cards for note '%s'.",
-                    len(flash_cards),
-                    note.id,
-                )
-
-                ids: list[int] | None = self._anki.add_cards(note.id, flash_cards)
-
-            if not ids:
-                logger.error(
-                    "Failed to add cards for note '%s' after %d attempts.",
-                    note.id,
-                    self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD,
-                )
+            if card_ids is None:
                 return False
 
             if note.anki_cards:
@@ -104,14 +73,27 @@ class NoteProcessor:
                     note.id,
                 )
 
-            self._vault.write_metadata(note, ids)
+            self._vault.write_metadata(note, card_ids)
             self._vault.move_to(note, self.settings.MAIN_NOTES_FOLDER)
-            self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=ids))
+            self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=card_ids))
 
             logger.info("Processed note with id: '%s'.", note.id)
+
             return True
+        except AnkiError as exc:
+            logger.exception(
+                "Anki error of type %s while processing note with id '%s': %s",
+                type(exc).__name__,
+                note.id,
+                exc,
+            )
+            return False
+
         except Exception:
-            logger.exception("Failed processing note with id '%s'.", note.id)
+            logger.exception(
+                "Unexpected failure while processing note '%s'.",
+                note.id,
+            )
             return False
 
     def delete_old_cards(self, note_id: str, old_card_ids: list[int]) -> None:
@@ -127,3 +109,46 @@ class NoteProcessor:
         for card_id in old_card_ids:
             self._anki.delete_card(card_id)
             self._vault.remove_list_item(note_path, "anki_cards", str(card_id))
+
+    def _try_create_cards(self, note: VaultNote) -> list[int] | None:
+        max_retries: int = self.settings.MAX_RETRIES_ON_ANKI_DUPLICATE_CARD
+
+        for attempt in range(max_retries + 1):
+            flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
+
+            if not flash_cards:
+                logger.error(
+                    "AI generated no cards for note '%s'.",
+                    note.id,
+                )
+                return None
+
+            logger.info(
+                "Generated %d flash cards for note with id: '%s'.",
+                len(flash_cards),
+                note.id,
+            )
+            try:
+                ids: list[int] | None = self._anki.add_cards(note.id, flash_cards)
+            except AnkiDuplicateNoteError:
+                if attempt == max_retries:
+                    logger.error(
+                        "Failed to generate unique cards for note '%s' "
+                        "after %d total attempts.",
+                        note.id,
+                        max_retries + 1,
+                    )
+                    return None
+
+                logger.warning(
+                    "Anki rejected generated cards for note '%s' as duplicates. "
+                    "Regenerating (%d/%d).",
+                    note.id,
+                    attempt + 1,
+                    max_retries,
+                )
+                continue
+
+            return ids
+
+        return None
