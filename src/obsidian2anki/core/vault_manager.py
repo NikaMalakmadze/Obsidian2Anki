@@ -21,10 +21,13 @@ class VaultManager:
         self.root: Path = Path(self.settings.LOCAL_VAULT)
         self.note_properties: tuple[str, ...] = VAULT_NOTE_NECESSARY_PROPERTIES
 
-    def get_folder_notes(self, dir_name: str) -> list[VaultNote]:
+    def get_folder_notes(self, dir_name: str, recursive: bool) -> list[VaultNote]:
         folder_path: Path = self.root / dir_name
         try:
-            notes: list[VaultNote] = self._get_notes_recursively(folder_path, True)
+            notes: list[VaultNote] = [
+                self._process_file(file)
+                for file in self.discover_notes(folder_path, recursive)
+            ]
             return notes
         except ObsidianFolderDoesNotExists:
             logger.exception(
@@ -104,28 +107,21 @@ class VaultManager:
         )
 
     def move_to(self, note: VaultNote, destination_folder: str) -> None:
-        destination_folder_path: Path = self.root / destination_folder
         note_file: Path = Path(note.path)
-        note_path_str: str = str((destination_folder_path / note_file.name).resolve())
+        relative_path: Path = note_file.relative_to(self.root)
 
-        if note.path != note_path_str:
-            note_file.rename(destination_folder_path / note_file.name)
-            note.path = note_path_str
+        destination_path: Path = self.root / destination_folder / relative_path
 
-    def _get_notes_recursively(
-        self, root: Path, first_run: bool = False
-    ) -> list[VaultNote]:
-        if first_run and not root.exists():
-            raise ObsidianFolderDoesNotExists(
-                f"Folder with path: {root.resolve()} does not exists"
-            )
-        notes: list[VaultNote] = []
+        if note_file.resolve() != destination_path.resolve():
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            note_file.rename(destination_path)
+            note.path = str(destination_path.resolve())
 
-        for item in root.iterdir():
-            if item.is_dir():
-                notes.extend(self._get_notes_recursively(item))
-            elif self._is_md(item):
-                notes.append(self._process_file(item))
+    def discover_notes(self, root: Path, recursive: bool) -> list[Path]:
+        pattern: str = "**/*.md" if recursive else "*.md"
+        notes: list[Path] = [
+            file for file in list(root.glob(pattern)) if file.is_file()
+        ]
         return notes
 
     def _process_file(self, note_path: Path) -> VaultNote:
