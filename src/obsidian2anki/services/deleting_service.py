@@ -42,7 +42,8 @@ class DeletingService:
 
     def delete_note(self, note_id: str) -> None:
         if not self._state.in_state(note_id):
-            logger.info("Note with id: '%s' is not in state", note_id)
+            logger.info("Note with id: '%s' is not in state.", note_id)
+            return
 
         note_path: Path = Path(self._state.get_property_of(note_id, "path"))
         note_cards: list[int] = self._state.get_property_of(note_id, "anki_note_ids")
@@ -53,6 +54,7 @@ class DeletingService:
         self._state.delete_state_item(note_id)
 
         if not note_path.is_file():
+            logger.info("Note with id: '%s' does not exists in vault.", note_id)
             return
 
         self._vault.remove_property(note_path)
