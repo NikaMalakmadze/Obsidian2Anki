@@ -17,15 +17,15 @@ class ProcessingService:
         self._state = state
         self._note_processor = note_processor
 
-    def process(self, dry_run: bool = False) -> None:
+    def process(self, dry_run: bool = False, recursive: bool = False) -> None:
         try:
-            self._process(dry_run)
+            self._process(dry_run, recursive)
         finally:
             self._state.save()
 
-    def _process(self, dry_run: bool = False) -> None:
+    def _process(self, dry_run: bool = False, recursive: bool = False) -> None:
         notes: list[VaultNote] = self._vault.get_folder_notes(
-            self._vault.settings.INBOX_FOLDER
+            self._vault.settings.INBOX_FOLDER, recursive
         )
         if not notes:
             logger.info("No notes found in '%s'.", self._vault.settings.INBOX_FOLDER)

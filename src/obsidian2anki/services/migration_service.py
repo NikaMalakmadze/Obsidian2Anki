@@ -17,15 +17,15 @@ class MigrationService:
         self._state = state
         self._note_processor = note_processor
 
-    def migrate(self, dry_run: bool = False) -> None:
+    def migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
         try:
-            self._migrate(dry_run)
+            self._migrate(dry_run, recursive)
         finally:
             self._state.save()
 
-    def _migrate(self, dry_run: bool = False) -> None:
+    def _migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
         main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
-            self._vault.settings.MAIN_NOTES_FOLDER
+            self._vault.settings.MAIN_NOTES_FOLDER, recursive
         )
         if not main_folder_notes:
             logger.info(

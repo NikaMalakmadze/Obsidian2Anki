@@ -24,7 +24,9 @@ class StatsService(Protocol):
 class NoteFormatterService(Protocol):
     """Interface for formatting vault legacy notes."""
 
-    def ensure_notes_format(self, dry_run: bool = False) -> None:
+    def ensure_notes_format(
+        self, dry_run: bool = False, recursive: bool = False
+    ) -> None:
         """Format notes into the structure required by the application."""
         ...
 
@@ -32,7 +34,7 @@ class NoteFormatterService(Protocol):
 class MigrationService(Protocol):
     """Interface for performing the full note migration."""
 
-    def migrate(self, dry_run: bool = False) -> None:
+    def migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
         """Migrate and synchronize existing vault notes."""
         ...
 
@@ -40,7 +42,7 @@ class MigrationService(Protocol):
 class ProcessingService(Protocol):
     """Interface for processing new notes."""
 
-    def process(self, dry_run: bool = False) -> None:
+    def process(self, dry_run: bool = False, recursive: bool = False) -> None:
         """Process notes and synchronize generated cards with Anki."""
         ...
 
@@ -89,7 +91,7 @@ class Obsidian2Anki:
         self._note_formatter = note_formatter
         self._stats = stats
 
-    def migrate(self, dry_run: bool = False) -> None:
+    def migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
         """Initialize tracking and synchronize existing notes.
 
         Performs the initial setup by registering notes in the application's
@@ -100,10 +102,10 @@ class Obsidian2Anki:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Starting migration.")
-        self._migration.migrate(dry_run)
+        self._migration.migrate(dry_run, recursive)
         logger.info("Migration completed.")
 
-    def process(self, dry_run: bool = False) -> None:
+    def process(self, dry_run: bool = False, recursive: bool = False) -> None:
         """Process notes and synchronize them with Anki.
 
         Detects new notes, generates flashcards when needed, updates the
@@ -113,7 +115,7 @@ class Obsidian2Anki:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Starting processing notes.")
-        self._processing.process(dry_run)
+        self._processing.process(dry_run, recursive)
         logger.info("Finished processing notes.")
 
     def clear(self, dry_run: bool = False) -> None:
@@ -129,14 +131,14 @@ class Obsidian2Anki:
         self._clearing.clear(dry_run)
         logger.info("Finished clearing everything.")
 
-    def format_notes(self, dry_run: bool = False) -> None:
+    def format_notes(self, dry_run: bool = False, recursive: bool = False) -> None:
         """Convert existing notes to the required Obsidian2Anki format.
 
         Args:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Starting note formatting.")
-        self._note_formatter.ensure_notes_format(dry_run)
+        self._note_formatter.ensure_notes_format(dry_run, recursive)
         logger.info("Note formatting completed.")
 
     def delete_card(self, card_id: str) -> None:
