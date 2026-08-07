@@ -33,6 +33,9 @@ class ArgParser:
         if command.supports_dry_run:
             self._add_dry_run(command_parser)
 
+        if command.supports_recursive:
+            self._add_recursive(command_parser)
+
     def _init_base_args(self) -> None:
         self._parser.add_argument(
             "-v", "--verbose", action="store_true", help="Increase output verbosity"
@@ -49,4 +52,12 @@ class ArgParser:
             "--dry-run",
             action="store_true",
             help="Show what would be changed without making any changes.",
+        )
+
+    @staticmethod
+    def _add_recursive(command_parser: ArgumentParser) -> None:
+        command_parser.add_argument(
+            "--recursive",
+            action="store_true",
+            help="Process directories recursively.",
         )

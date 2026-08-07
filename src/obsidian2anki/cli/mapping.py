@@ -10,6 +10,7 @@ def generate_app_command_mapping(
     app: Obsidian2Anki, args: Namespace
 ) -> dict[str, CommandHandler | ArgCommandHandler]:
     dry_run: bool = getattr(args, "dry_run", False)
+    recursive: bool = getattr(args, "recursive", False)
 
     commands_mapping: dict[str, CommandHandler | ArgCommandHandler] = {}
 
@@ -18,10 +19,16 @@ def generate_app_command_mapping(
         name: str = command.name
 
         if isinstance(command, CommandDefinition):
-            commands_mapping[name] = (
-                (lambda method=method, dry_run=dry_run: method(dry_run))
-                if command.supports_dry_run
-                else lambda method=method: method()
+            kwargs: dict[str, bool] = {}
+
+            if command.supports_dry_run:
+                kwargs["dry_run"] = dry_run
+
+            if command.supports_recursive:
+                kwargs["recursive"] = recursive
+
+            commands_mapping[name] = lambda method=method, kwargs=kwargs: method(
+                **kwargs
             )
             continue
 
