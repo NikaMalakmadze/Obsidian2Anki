@@ -34,6 +34,13 @@ class VaultManager:
                 "Folder with path: '%s' does not exists", folder_path.resolve()
             )
 
+    def discover_notes(self, root: Path, recursive: bool) -> list[Path]:
+        pattern: str = "**/*.md" if recursive else "*.md"
+        notes: list[Path] = [
+            file for file in list(root.glob(pattern)) if file.is_file()
+        ]
+        return notes
+
     def remove_property(self, note_path: Path, property: str = "anki_cards") -> None:
         frontmatter_post: Post = self._get_frontmatter(note_path)
 
@@ -106,23 +113,16 @@ class VaultManager:
             needed_property in note_keys for needed_property in self.note_properties
         )
 
-    def move_to(self, note: VaultNote, destination_folder: str) -> None:
-        note_file: Path = Path(note.path)
-        relative_path: Path = note_file.relative_to(self.root)
-
+    def move_to(
+        self, note_path: Path, target_folder: str, destination_folder: str
+    ) -> None:
+        relative_path: Path = note_path.relative_to(self.root / target_folder)
         destination_path: Path = self.root / destination_folder / relative_path
 
-        if note_file.resolve() != destination_path.resolve():
+        if note_path.resolve() != destination_path.resolve():
             destination_path.parent.mkdir(parents=True, exist_ok=True)
-            note_file.rename(destination_path)
-            note.path = str(destination_path.resolve())
-
-    def discover_notes(self, root: Path, recursive: bool) -> list[Path]:
-        pattern: str = "**/*.md" if recursive else "*.md"
-        notes: list[Path] = [
-            file for file in list(root.glob(pattern)) if file.is_file()
-        ]
-        return notes
+            note_path.rename(destination_path)
+            return str(destination_path.resolve())
 
     def _process_file(self, note_path: Path) -> VaultNote:
         frontmatter_post: Post = self._get_frontmatter(note_path)
@@ -140,7 +140,7 @@ class VaultManager:
 
         return VaultNote(
             id=frontmatter_post["id"],
-            title=note_path.name.split(".")[0],
+            title=note_path.stem,
             tags=frontmatter_post.get("tags")
             if isinstance(frontmatter_post.get("tags"), list)
             else [],

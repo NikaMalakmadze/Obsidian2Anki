@@ -74,7 +74,14 @@ class NoteProcessor:
                 )
 
             self._vault.write_metadata(note, card_ids)
-            self._vault.move_to(note, self.settings.MAIN_NOTES_FOLDER)
+            new_path: str | None = self._vault.move_to(
+                Path(note.path),
+                self.settings.INBOX_FOLDER,
+                self.settings.MAIN_NOTES_FOLDER,
+            )
+            if new_path is not None:
+                note.path = new_path
+
             self._state.prepare_for_state(NoteInfo(vault_info=note, card_ids=card_ids))
 
             logger.info("Processed note with id: '%s'.", note.id)
