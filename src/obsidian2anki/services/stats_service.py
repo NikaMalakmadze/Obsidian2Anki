@@ -6,7 +6,9 @@ from rich import box
 import logging
 
 from obsidian2anki.core.state_manager import StateManager
+from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.anki_manager import AnkiManager
+from obsidian2anki.models import VaultNote
 
 logger = logging.getLogger(__name__)
 
@@ -20,23 +22,39 @@ class Statistic:
 
 
 class StatsService:
-    def __init__(self, state: StateManager, anki: AnkiManager) -> None:
+    def __init__(
+        self, vault: VaultManager, state: StateManager, anki: AnkiManager
+    ) -> None:
         self._anki = anki
         self._state = state
+        self._vault = vault
         self._console = Console()
-        self._local_vault: Path = Path(self._state.settings.LOCAL_VAULT)
+        self._local_vault: Path = vault.root
 
-    def stats(self) -> None:
-        inbox_folder_notes = self._folder_notes(self._state.settings.INBOX_FOLDER)
-        main_folder_notes = self._folder_notes(self._state.settings.MAIN_NOTES_FOLDER)
+    def stats(self, recursive: bool = False) -> None:
+        inbox_folder_notes = self._vault.get_folder_notes(
+            self._state.settings.INBOX_FOLDER, recursive
+        )
+        main_folder_notes = self._vault.get_folder_notes(
+            self._state.settings.MAIN_NOTES_FOLDER, recursive
+        )
+
+        inbox_folder_stats = self._folder_notes(
+            self._state.settings.INBOX_FOLDER, inbox_folder_notes
+        )
+        main_folder_stats = self._folder_notes(
+            self._state.settings.MAIN_NOTES_FOLDER, main_folder_notes
+        )
+        unprocessed_notes = self._unprocessed_notes(
+            inbox_folder_notes, main_folder_notes
+        )
         processed_notes = self._processed_notes()
-        unprocessed_notes = self._unprocessed_notes()
         cards_count = self._anki_cards()
 
         table: Table = self._construct_table(
             (
-                inbox_folder_notes,
-                main_folder_notes,
+                inbox_folder_stats,
+                main_folder_stats,
                 processed_notes,
                 unprocessed_notes,
                 cards_count,
@@ -52,32 +70,27 @@ class StatsService:
 
         for id, processed_note in processed_notes:
             logger.debug(
-                "Processed note - '%s' with id - '%s'", processed_note[1].title, id
+                "Processed note - '%s' with id - '%s'", processed_note.title, id
             )
 
         return Statistic("Processed notes", len(processed_notes))
 
-    def _unprocessed_notes(self) -> Statistic:
-        main_notes_folder_path: Path = (
-            self._local_vault / self._state.settings.MAIN_NOTES_FOLDER
-        )
-
-        unprocessed_notes: list[str] = [
-            file.name.split(".")[0]
-            for file in main_notes_folder_path.iterdir()
-            if file.is_file()
-            and not self._state.get_by_property("path", str(file.resolve()))
+    def _unprocessed_notes(
+        self, inbox_folder_notes: list[VaultNote], main_folder_notes: list[VaultNote]
+    ) -> Statistic:
+        inbox_unprocessed: list[str] = [note.title for note in inbox_folder_notes]
+        main_unprocessed: list[str] = [
+            note.title
+            for note in main_folder_notes
+            if not self._state.get_by_property("path", note.path)
         ]
 
-        total_notes: int = len(
-            [file.is_file() for file in main_notes_folder_path.iterdir()]
-        )
+        unprocessed_notes: list[str] = inbox_unprocessed + main_unprocessed
 
         logger.info(
-            "Found %d unprocessed notes out of %d processed notes in '%s' folder.",
+            "Found %d unprocessed notes out of %d total notes in vault",
             len(unprocessed_notes),
-            total_notes,
-            self._state.settings.MAIN_NOTES_FOLDER,
+            len(main_folder_notes) + len(inbox_folder_notes),
         )
 
         for unprocessed_note in unprocessed_notes:
@@ -85,21 +98,13 @@ class StatsService:
 
         return Statistic("Unprocessed Notes", len(unprocessed_notes))
 
-    def _folder_notes(self, folder_name: str) -> Statistic:
-        main_notes_folder = self._local_vault / folder_name
+    def _folder_notes(self, folder_name: str, notes: list[VaultNote]) -> Statistic:
+        logger.info("Found %d notes in folder: '%s'", len(notes), folder_name)
 
-        total_notes: list[str] = [
-            file.name.split(".")[0]
-            for file in main_notes_folder.iterdir()
-            if file.is_file()
-        ]
-
-        logger.info("Found %d notes in folder: '%s'", len(total_notes), folder_name)
-
-        for note in total_notes:
+        for note in notes:
             logger.debug("%s folder note: '%s'", folder_name, note)
 
-        return Statistic(f"Notes In {folder_name} Folder", len(total_notes))
+        return Statistic(f"Notes In {folder_name} Folder", len(notes))
 
     def _anki_cards(self) -> Statistic:
         cards = self._anki.get_notes()
