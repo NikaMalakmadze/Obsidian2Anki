@@ -58,3 +58,9 @@ class DeletingService:
             return
 
         self._vault.remove_property(note_path)
+
+        self._vault.move_to(
+            note_path,
+            self._state.settings.MAIN_NOTES_FOLDER,
+            self._state.settings.INBOX_FOLDER,
+        )
