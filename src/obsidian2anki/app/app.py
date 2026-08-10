@@ -16,7 +16,7 @@ class DoctorService(Protocol):
 class StatsService(Protocol):
     """Interface for getting stats about program"""
 
-    def stats(self) -> None:
+    def stats(self, recursive: bool = False) -> None:
         """Get application stats"""
         ...
 
@@ -161,12 +161,12 @@ class Obsidian2Anki:
         self._deleting.delete_note(note_id)
         logger.info("Ended deleting card note id`%s`.", note_id)
 
-    def stats(self) -> None:
+    def stats(self, recursive: bool = False) -> None:
         """Display statistics about the current application state.
 
         Collects and presents summary information about the managed notes,
         generated Anki cards, and other relevant application metrics.
         """
         logger.info("Generating application statistics.")
-        self._stats.stats()
+        self._stats.stats(recursive)
         logger.info("Application statistics generated.")

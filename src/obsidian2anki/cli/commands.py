@@ -13,7 +13,7 @@ class BaseCommandDefinition:
 @dataclass(frozen=True)
 class CommandDefinition(BaseCommandDefinition):
     supports_dry_run: bool = True
-    supports_recursive: bool = False
+    supports_recursive: bool = True
 
 
 @dataclass(frozen=True)
@@ -35,31 +35,28 @@ COMMANDS: tuple[CommandDefinition, ...] = (
         name="migrate",
         help="Run the full migration over the main notes folder.",
         func_name="migrate",
-        supports_recursive=True,
     ),
     CommandDefinition(
         name="process",
         help="Process new notes from the inbox folder.",
         func_name="process",
-        supports_recursive=True,
     ),
     CommandDefinition(
         name="clear",
         help="Delete all generated cards and clear state.",
         func_name="clear",
+        supports_recursive=False,
     ),
     CommandDefinition(
         name="format-notes",
         help="Convert existing notes to the required application format.",
         func_name="format_notes",
-        supports_recursive=True,
     ),
     CommandDefinition(
         name="stats",
         help="Check application stats.",
         func_name="stats",
         supports_dry_run=False,
-        supports_recursive=True,
     ),
 )
 
