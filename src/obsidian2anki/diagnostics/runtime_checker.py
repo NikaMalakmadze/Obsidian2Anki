@@ -30,6 +30,8 @@ class RuntimeChecker:
         results: list[AppRuntimeCheck] = [
             self._check_python_version(),
             self._check_file(".env File", ".env"),
+            self._check_folder("Logs Folder", self._base_dir / "logs"),
+            self._check_file("Logs File", self._base_dir / "logs/obsidian2anki.log"),
             self._check_folder("Local Vault", str(local_vault)),
             self._check_folder(
                 "Inbox Folder", local_vault / self._settings.INBOX_FOLDER
@@ -58,10 +60,6 @@ class RuntimeChecker:
             )
 
         return results
-
-    @staticmethod
-    def passed_checks(results: list[AppRuntimeCheck]) -> bool:
-        return all(result.passed for result in results)
 
     def _check_python_version(self) -> AppRuntimeCheck:
         current_version = sys.version_info[:3]
