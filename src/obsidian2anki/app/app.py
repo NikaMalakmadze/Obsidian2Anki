@@ -5,14 +5,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class DoctorService(Protocol):
-    """Interface for running application diagnostic checks."""
-
-    def run(self) -> None:
-        """Run all application health checks."""
-        ...
-
-
 class StatsService(Protocol):
     """Interface for getting stats about program"""
 
