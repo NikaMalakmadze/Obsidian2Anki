@@ -18,8 +18,20 @@ logger = logging.getLogger(__name__)
 class Doctor:
     """Check whether Obsidian2Anki is configured correctly."""
 
-    def run(self) -> None:
+    def __init__(self) -> None:
+        self._output_manager = OutputManager()
+
+    def run(self) -> int:
         """Run all diagnostic checks."""
+        try:
+            return self._run()
+        except Exception:
+            logger.exception(
+                "Unexpected exception while running application diagnostic checks."
+            )
+            return 1
+
+    def _run(self) -> int:
         logger.info("Starting application diagnostic checks.")
 
         environment_checker = EnvironmentChecker(get_settings)
@@ -27,10 +39,8 @@ class Doctor:
             environment_checker.check_env()
         )
 
-        output_manager = OutputManager()
-
         if isinstance(check_result, list):
-            output_manager.print_table(
+            self._output_manager.print_table(
                 "Environment Results",
                 environment_table_columns(),
                 check_result,
@@ -40,7 +50,7 @@ class Doctor:
                 "%d environment error(s) detected.",
                 len(check_result),
             )
-            return
+            return 1
 
         runtime_checker = RuntimeChecker(
             check_result,
@@ -49,18 +59,21 @@ class Doctor:
         )
         runtime_checks = runtime_checker.check_runtime()
 
-        output_manager.print_table(
+        self._output_manager.print_table(
             "Runtime Results",
             runtime_table_columns(),
             runtime_checks,
         )
 
-        if runtime_checker.passed_checks(runtime_checks):
+        failed_checks = sum(not result.passed for result in runtime_checks)
+
+        if failed_checks == 0:
             logger.info("Application diagnostic checks completed successfully.")
         else:
-            failed_checks = sum(not result.passed for result in runtime_checks)
             logger.warning(
                 "Application diagnostic checks completed with "
                 "%d failed runtime check(s).",
                 failed_checks,
             )
+
+        return 1 if failed_checks else 0
