@@ -16,15 +16,16 @@ class AI:
         self.settings: Settings = get_settings()
 
         self.delay: int = delay
-        self.prompt: str = self._get_prompt()
         self.client = genai.Client(api_key=self.settings.API_KEY)
 
     def generate_note_cards(self, note: VaultNote) -> list[Flashcard]:
+        prompt: str = self._get_prompt()
+
         while True:
             try:
                 response = self.client.models.generate_content(
                     model="gemini-3.1-flash-lite",
-                    contents=self.prompt
+                    contents=prompt
                     + f"\n\n{note.model_dump_json(indent=2, exclude=['id', 'path', 'anki_cards'])}",
                     config={
                         "response_mime_type": "application/json",
