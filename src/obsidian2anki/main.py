@@ -21,15 +21,13 @@ def main(argv: list[str] | None = None) -> int:
     commands_mapping = generate_app_command_mapping(app, args)
 
     try:
-        commands_mapping[args.command]()
+        return commands_mapping[args.command]()
     except KeyboardInterrupt:
         return logger.warning("Interrupted by user. Exiting.") or 130
     except Exception:
         return (
             logger.exception("Unhandled error while running '%s'.", args.command) or 1
         )
-
-    return 0
 
 
 if __name__ == "__main__":

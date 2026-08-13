@@ -3,6 +3,7 @@ import logging
 from obsidian2anki.core.note_processor import NoteProcessor
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.vault_manager import VaultManager
+from obsidian2anki.utils.enums import ExitCode
 from obsidian2anki.models import VaultNote
 
 
@@ -17,13 +18,13 @@ class MigrationService:
         self._state = state
         self._note_processor = note_processor
 
-    def migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def migrate(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         try:
-            self._migrate(dry_run, recursive)
+            return self._migrate(dry_run, recursive)
         finally:
             self._state.save()
 
-    def _migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def _migrate(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         main_folder_notes: list[VaultNote] = self._vault.get_folder_notes(
             self._vault.settings.MAIN_NOTES_FOLDER, recursive
         )
@@ -31,7 +32,7 @@ class MigrationService:
             logger.info(
                 "No notes found in '%s'.", self._vault.settings.MAIN_NOTES_FOLDER
             )
-            return
+            return ExitCode.SUCCESS
 
         logger.info(
             "Found %d notes in '%s'.",
@@ -60,7 +61,7 @@ class MigrationService:
 
         if dry_run:
             logger.debug("Ended migration on dry run.")
-            return
+            return ExitCode.SUCCESS
 
         c: int = 0
 
@@ -71,7 +72,7 @@ class MigrationService:
                 continue
 
             if not self._note_processor.process_note(note):
-                break
+                return ExitCode.ERROR
 
             c += 1
 
@@ -81,3 +82,5 @@ class MigrationService:
                 len(notes_needing_processing),
                 self._vault.settings.MAIN_NOTES_FOLDER,
             )
+
+        return ExitCode.SUCCESS

@@ -1,6 +1,8 @@
 from typing import Protocol
 import logging
 
+from obsidian2anki.utils.enums import ExitCode
+
 
 logger = logging.getLogger(__name__)
 
@@ -8,7 +10,7 @@ logger = logging.getLogger(__name__)
 class StatsService(Protocol):
     """Interface for getting stats about program"""
 
-    def stats(self, recursive: bool = False) -> None:
+    def stats(self, recursive: bool = False) -> ExitCode:
         """Get application stats"""
         ...
 
@@ -18,7 +20,7 @@ class NoteFormatterService(Protocol):
 
     def ensure_notes_format(
         self, dry_run: bool = False, recursive: bool = False
-    ) -> None:
+    ) -> ExitCode:
         """Format notes into the structure required by the application."""
         ...
 
@@ -26,7 +28,7 @@ class NoteFormatterService(Protocol):
 class MigrationService(Protocol):
     """Interface for performing the full note migration."""
 
-    def migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def migrate(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         """Migrate and synchronize existing vault notes."""
         ...
 
@@ -34,7 +36,7 @@ class MigrationService(Protocol):
 class ProcessingService(Protocol):
     """Interface for processing new notes."""
 
-    def process(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def process(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         """Process notes and synchronize generated cards with Anki."""
         ...
 
@@ -42,7 +44,7 @@ class ProcessingService(Protocol):
 class ClearService(Protocol):
     """Interface for clearing application-managed data."""
 
-    def clear(self, dry_run: bool = False) -> None:
+    def clear(self, dry_run: bool = False, force: bool = False) -> ExitCode:
         """Clear generated cards and application state."""
         ...
 
@@ -50,11 +52,11 @@ class ClearService(Protocol):
 class DeletingService(Protocol):
     """Interface for deleting cards and notes."""
 
-    def delete_card(self, card_id: int, dry_run: bool = False) -> None:
+    def delete_card(self, card_id: int, force: bool = False) -> ExitCode:
         """Delete an Anki card by its identifier."""
         ...
 
-    def delete_note(self, note_id: str, dry_run: bool = False) -> None:
+    def delete_note(self, note_id: str, force: bool = False) -> ExitCode:
         """Delete a note and its associated Anki cards."""
         ...
 
@@ -83,7 +85,7 @@ class Obsidian2Anki:
         self._note_formatter = note_formatter
         self._stats = stats
 
-    def migrate(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def migrate(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         """Initialize tracking and synchronize existing notes.
 
         Performs the initial setup by registering notes in the application's
@@ -94,10 +96,11 @@ class Obsidian2Anki:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Starting migration.")
-        self._migration.migrate(dry_run, recursive)
+        code = self._migration.migrate(dry_run, recursive)
         logger.info("Migration completed.")
+        return code
 
-    def process(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def process(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         """Process notes and synchronize them with Anki.
 
         Detects new notes, generates flashcards when needed, updates the
@@ -107,10 +110,11 @@ class Obsidian2Anki:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Starting processing notes.")
-        self._processing.process(dry_run, recursive)
+        code = self._processing.process(dry_run, recursive)
         logger.info("Finished processing notes.")
+        return code
 
-    def clear(self, dry_run: bool = False) -> None:
+    def clear(self, dry_run: bool = False, force: bool = False) -> ExitCode:
         """Remove all application-managed data.
 
         Clears tracked state and any generated resources managed by the
@@ -120,45 +124,50 @@ class Obsidian2Anki:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Started clearing everything.")
-        self._clearing.clear(dry_run)
+        code = self._clearing.clear(dry_run, force)
         logger.info("Finished clearing everything.")
+        return code
 
-    def format_notes(self, dry_run: bool = False, recursive: bool = False) -> None:
+    def format_notes(self, dry_run: bool = False, recursive: bool = False) -> ExitCode:
         """Convert existing notes to the required Obsidian2Anki format.
 
         Args:
             dry_run: If ``True``, report the planned changes without modifying the vault, application state, or Anki.
         """
         logger.info("Starting note formatting.")
-        self._note_formatter.ensure_notes_format(dry_run, recursive)
+        code = self._note_formatter.ensure_notes_format(dry_run, recursive)
         logger.info("Note formatting completed.")
+        return code
 
-    def delete_card(self, card_id: str) -> None:
+    def delete_card(self, card_id: str, force: bool = False) -> ExitCode:
         """Delete an Anki card by its identifier.
 
         Args:
             card_id: The unique identifier of the Anki card to delete.
         """
         logger.info("Starting deleting card with id: `%s`.", card_id)
-        self._deleting.delete_card(card_id)
+        code = self._deleting.delete_card(card_id, force)
         logger.info("Ended deleting card with id`%s`.", card_id)
+        return code
 
-    def delete_note(self, note_id: str) -> None:
+    def delete_note(self, note_id: str, force: bool = False) -> ExitCode:
         """Delete a vault note by its identifier from state and deleting its all cards.
 
         Args:
             note_id: The unique identifier of the vault note to delete.
         """
         logger.info("Starting deleting note with id: `%s`.", note_id)
-        self._deleting.delete_note(note_id)
+        code = self._deleting.delete_note(note_id, force)
         logger.info("Ended deleting card note id`%s`.", note_id)
+        return code
 
-    def stats(self, recursive: bool = False) -> None:
+    def stats(self, recursive: bool = False) -> ExitCode:
         """Display statistics about the current application state.
 
         Collects and presents summary information about the managed notes,
         generated Anki cards, and other relevant application metrics.
         """
         logger.info("Generating application statistics.")
-        self._stats.stats(recursive)
+        code = self._stats.stats(recursive)
         logger.info("Application statistics generated.")
+        return code

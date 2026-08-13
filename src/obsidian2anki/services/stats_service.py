@@ -8,6 +8,7 @@ import logging
 from obsidian2anki.core.state_manager import StateManager
 from obsidian2anki.core.vault_manager import VaultManager
 from obsidian2anki.core.anki_manager import AnkiManager
+from obsidian2anki.utils.enums import ExitCode
 from obsidian2anki.models import VaultNote
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class StatsService:
         self._console = Console()
         self._local_vault: Path = vault.root
 
-    def stats(self, recursive: bool = False) -> None:
+    def stats(self, recursive: bool = False) -> ExitCode:
         inbox_folder_notes = self._vault.get_folder_notes(
             self._state.settings.INBOX_FOLDER, recursive
         )
@@ -62,6 +63,8 @@ class StatsService:
         )
 
         self._console.print(table)
+
+        return ExitCode.SUCCESS
 
     def _processed_notes(self) -> Statistic:
         processed_notes = self._state.get_state_items()
