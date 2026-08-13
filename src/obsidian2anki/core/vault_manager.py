@@ -53,13 +53,16 @@ class VaultManager:
         self, note_path: Path, list_name: str, item: str
     ) -> list[str] | None:
         frontmatter_post: Post = self._get_frontmatter(note_path)
-
         note_list_property: str = frontmatter_post.get(list_name, "")
-
         if not note_list_property:
             return
 
-        note_list: list[str] = [i.strip() for i in note_list_property.split(",")]
+        note_list: list[str] = []
+        if isinstance(note_list_property, list):
+            note_list = note_list_property
+        else:
+            note_list = [i.strip() for i in note_list_property.split(",") if i.strip()]
+
         if item.strip() in note_list:
             note_list.remove(item.strip())
 
