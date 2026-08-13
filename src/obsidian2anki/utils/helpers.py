@@ -1,5 +1,7 @@
 import re
 
+from rich.prompt import Confirm
+
 REPLACEMENTS: list[tuple[str, str] | tuple[str, str, str]] = [
     (
         r"^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*\r?\n?",
@@ -48,3 +50,7 @@ def process_note_content(content: str) -> str:
         content = content.replace(f"__CODE_BLOCK_{i}__", block)
 
     return content
+
+
+def get_confirm(prompt: str) -> bool:
+    return Confirm.ask(prompt, case_sensitive=False)
