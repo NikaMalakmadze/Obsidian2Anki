@@ -8,15 +8,16 @@ class BaseCommandDefinition:
     name: str
     help: str
     func_name: str
+    supports_force: bool = False
 
 
 @dataclass(frozen=True)
 class CommandDefinition(BaseCommandDefinition):
-    supports_dry_run: bool = True
-    supports_recursive: bool = True
+    supports_dry_run: bool = False
+    supports_recursive: bool = False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ArgCommandDefinition(BaseCommandDefinition):
     arg_name: str
     arg_help: str
@@ -26,7 +27,6 @@ class ArgCommandDefinition(BaseCommandDefinition):
 DOCTOR_COMMAND: CommandDefinition = CommandDefinition(
     name="doctor",
     help="Check application health.",
-    supports_dry_run=False,
     func_name="run",
 )
 
@@ -35,28 +35,35 @@ COMMANDS: tuple[CommandDefinition, ...] = (
         name="migrate",
         help="Run the full migration over the main notes folder.",
         func_name="migrate",
+        supports_dry_run=True,
+        supports_recursive=True,
     ),
     CommandDefinition(
         name="process",
         help="Process new notes from the inbox folder.",
         func_name="process",
+        supports_dry_run=True,
+        supports_recursive=True,
     ),
     CommandDefinition(
         name="clear",
         help="Delete all generated cards and clear state.",
         func_name="clear",
-        supports_recursive=False,
+        supports_dry_run=True,
+        supports_force=True,
     ),
     CommandDefinition(
         name="format-notes",
         help="Convert existing notes to the required application format.",
         func_name="format_notes",
+        supports_dry_run=True,
+        supports_recursive=True,
     ),
     CommandDefinition(
         name="stats",
         help="Check application stats.",
         func_name="stats",
-        supports_dry_run=False,
+        supports_recursive=True,
     ),
 )
 
@@ -68,6 +75,7 @@ ARG_COMMANDS: tuple[ArgCommandDefinition, ...] = (
         arg_help="ID of the Anki card to delete.",
         handler=CardId,
         func_name="delete_card",
+        supports_force=True,
     ),
     ArgCommandDefinition(
         name="delete-note",
@@ -76,6 +84,7 @@ ARG_COMMANDS: tuple[ArgCommandDefinition, ...] = (
         arg_help="ID of the note to delete.",
         handler=NoteId,
         func_name="delete_note",
+        supports_force=True,
     ),
 )
 

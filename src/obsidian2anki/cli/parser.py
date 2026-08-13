@@ -36,6 +36,9 @@ class ArgParser:
         if command.supports_recursive:
             self._add_recursive(command_parser)
 
+        if command.supports_force:
+            self._add_force(command_parser)
+
     def _init_base_args(self) -> None:
         self._parser.add_argument(
             "-v", "--verbose", action="store_true", help="Increase output verbosity"
@@ -44,6 +47,14 @@ class ArgParser:
             "--version",
             action="version",
             version=f"%(prog)s {version('obsidian2anki')}",
+        )
+
+    @staticmethod
+    def _add_force(command_parser: ArgumentParser) -> None:
+        command_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Skip confirmation prompts for destructive operations.",
         )
 
     @staticmethod
