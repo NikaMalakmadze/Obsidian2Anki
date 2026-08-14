@@ -24,6 +24,9 @@ class ArgParser:
             command.name, help=command.help
         )
 
+        if command.supports_force:
+            self._add_force(command_parser)
+
         if isinstance(command, ArgCommandDefinition):
             command_parser.add_argument(
                 command.arg_name, help=command.arg_help, type=command.handler
@@ -35,9 +38,6 @@ class ArgParser:
 
         if command.supports_recursive:
             self._add_recursive(command_parser)
-
-        if command.supports_force:
-            self._add_force(command_parser)
 
     def _init_base_args(self) -> None:
         self._parser.add_argument(
