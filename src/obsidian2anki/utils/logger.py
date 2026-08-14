@@ -31,6 +31,8 @@ def setup_logger(args: Namespace) -> None:
 def _cofigure_third_party_loggers() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("google_genai").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def _configure_console_handler(

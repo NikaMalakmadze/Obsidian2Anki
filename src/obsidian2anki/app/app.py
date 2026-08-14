@@ -147,7 +147,7 @@ class Obsidian2Anki:
         """
         logger.info("Starting deleting card with id: `%s`.", card_id)
         code = self._deleting.delete_card(card_id, force)
-        logger.info("Ended deleting card with id`%s`.", card_id)
+        logger.info("Ended deleting card with id: `%s`.", card_id)
         return code
 
     def delete_note(self, note_id: str, force: bool = False) -> ExitCode:
@@ -158,7 +158,7 @@ class Obsidian2Anki:
         """
         logger.info("Starting deleting note with id: `%s`.", note_id)
         code = self._deleting.delete_note(note_id, force)
-        logger.info("Ended deleting card note id`%s`.", note_id)
+        logger.info("Ended deleting card note id: `%s`.", note_id)
         return code
 
     def stats(self, recursive: bool = False) -> ExitCode:
