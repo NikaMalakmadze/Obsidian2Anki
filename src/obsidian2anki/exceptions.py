@@ -6,6 +6,10 @@ class ObsidianFolderDoesNotExists(O2ABaseException):
     pass
 
 
+class AIInvalidOutput(O2ABaseException):
+    pass
+
+
 class AnkiError(O2ABaseException):
     """Base exception for Anki-related failures."""
 
