@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from obsidian2anki.utils.type import NoneEmptyText
+
 
 class VaultNote(BaseModel):
     id: str
@@ -11,13 +13,13 @@ class VaultNote(BaseModel):
 
 
 class Flashcard(BaseModel):
-    question: str
-    answer: str
+    question: NoneEmptyText
+    answer: NoneEmptyText
     tags: list[str]
 
 
 class FlashcardBatch(BaseModel):
-    cards: list[Flashcard]
+    cards: list[Flashcard] = Field(min_length=1, max_length=5)
 
 
 class AnkiCard(BaseModel):

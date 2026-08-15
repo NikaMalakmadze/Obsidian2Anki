@@ -1,4 +1,5 @@
-from typing import Literal
+from pydantic import StringConstraints
+from typing import Literal, Annotated
 
 
 Action = Literal[
@@ -14,3 +15,6 @@ StateNoteProperties = Literal[
     "processed_at",
     "updated_at",
 ]
+
+
+NoneEmptyText = Annotated[str, StringConstraints(StringConstraints=True, min_length=1)]
