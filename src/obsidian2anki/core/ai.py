@@ -1,11 +1,14 @@
 from google.genai.errors import APIError, ClientError
+from pydantic import ValidationError
 from pathlib import Path
 from google import genai
 import logging
 import time
 
+
 from obsidian2anki.models import FlashcardBatch, VaultNote, Flashcard
 from obsidian2anki.config import get_settings, Settings, BASE_DIR
+from obsidian2anki.exceptions import AIInvalidOutput
 
 
 logger = logging.getLogger(__name__)
@@ -32,14 +35,19 @@ class AI:
                         "response_schema": FlashcardBatch,
                     },
                 )
-                break
+                cards: FlashcardBatch = FlashcardBatch.model_validate_json(
+                    response.text
+                )
+                return cards.cards
+            except ValidationError as exc:
+                logger.error("Gemini returned invalid flashcards: %s", exc)
+                raise AIInvalidOutput(
+                    "Gemini returned invalid flashcard output."
+                ) from exc
             except ClientError:
                 logger.warning("Rate limit hit. Retrying in %s seconds...", self.delay)
                 time.sleep(self.delay)
                 self.delay = min(self.delay * 2, 60)
-
-        cards: FlashcardBatch = FlashcardBatch.model_validate_json(response.text)
-        return cards.cards
 
     def _get_prompt(self) -> str:
         prompt_file: Path = BASE_DIR / self.settings.PROMPT_FILE

@@ -2,6 +2,7 @@ from pathlib import Path
 import logging
 
 from obsidian2anki.exceptions import (
+    AIInvalidOutput,
     AnkiDuplicateNoteError,
     AnkiError,
 )
@@ -87,6 +88,15 @@ class NoteProcessor:
             logger.info("Processed note with id: '%s'.", note.id)
 
             return True
+
+        except AIInvalidOutput as exc:
+            logger.error(
+                "AI returned invalid flashcards for note '%s': %s",
+                note.id,
+                exc,
+            )
+            return False
+
         except AnkiError as exc:
             logger.exception(
                 "Anki error of type %s while processing note with id '%s': %s",
@@ -122,13 +132,6 @@ class NoteProcessor:
 
         for attempt in range(max_retries + 1):
             flash_cards: list[Flashcard] = self._ai.generate_note_cards(note)
-
-            if not flash_cards:
-                logger.error(
-                    "AI generated no cards for note '%s'.",
-                    note.id,
-                )
-                return None
 
             logger.info(
                 "Generated %d flash cards for note with id: '%s'.",
