@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     INBOX_FOLDER: str
     MAIN_NOTES_FOLDER: str
 
+    AI_MAX_RETRIES: int = 3
+    AI_RETRY_BASE_DELAY: float = 3.0
+    AI_RETRY_MAX_DELAY: float = 10.0
+
     MAX_RETRIES_ON_ANKI_DUPLICATE_CARD: int
 
 
