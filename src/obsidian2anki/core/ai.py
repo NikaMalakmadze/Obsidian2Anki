@@ -18,6 +18,7 @@ class AI:
     def __init__(self, delay: int = 7) -> None:
         self.settings: Settings = get_settings()
 
+        self.initial_delay: int = delay
         self.delay: int = delay
         self.client = genai.Client(api_key=self.settings.API_KEY)
 
@@ -37,6 +38,11 @@ class AI:
                 )
                 cards: FlashcardBatch = FlashcardBatch.model_validate_json(
                     response.text
+                )
+                self.delay = self.initial_delay
+                logger.debug(
+                    "Backoff delay was reseted to initial value: %s seconds...",
+                    self.delay,
                 )
                 return cards.cards
             except ValidationError as exc:
