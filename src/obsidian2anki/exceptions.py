@@ -6,7 +6,15 @@ class ObsidianFolderDoesNotExists(O2ABaseException):
     pass
 
 
-class AIInvalidOutput(O2ABaseException):
+class AIError(O2ABaseException):
+    pass
+
+
+class AIInvalidOutput(AIError):
+    pass
+
+
+class AIRequestFailed(AIError):
     pass
 
 
