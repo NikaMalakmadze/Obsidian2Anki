@@ -1,10 +1,16 @@
+from pydantic import ValidationError
 from datetime import datetime, UTC
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
+import tempfile
 import json
+import os
 
+
+from obsidian2anki.exceptions import InvalidStateError, UnsupportedStateVersionError
 from obsidian2anki.config import Settings, get_settings, BASE_DIR
+from obsidian2anki.constants import STATE_SCHEMA_VERSION
 from obsidian2anki.utils.type import StateNoteProperties
 from obsidian2anki.models import StateNote, NoteInfo
 
@@ -21,7 +27,6 @@ class StateManager:
         self.state_file: Path = self.state_folder / "state.json"
         self.state_file.touch(exist_ok=True)
 
-        self._temp_data: list[tuple[str, StateNote]] = []
         self._is_changed: bool = False
         self._load_state()
 
@@ -84,8 +89,7 @@ class StateManager:
             content_hash=content_hash,
         )
 
-        self._temp_data.append((note.vault_info.id, state_note))
-
+        self._state[note.vault_info.id] = state_note
         self._is_changed = True
 
     def delete_card(self, card_id: int) -> str | None:
@@ -141,25 +145,67 @@ class StateManager:
         if not self._is_changed:
             return
 
-        self._extend_state()
+        data = {
+            "version": STATE_SCHEMA_VERSION,
+            "notes": {
+                note_id: note.model_dump() for note_id, note in self._state.items()
+            },
+        }
 
-        self.state_file.write_text(
-            json.dumps(
-                {k: v.model_dump() for k, v in self._state.items()},
-                indent=4,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
+        content: str = json.dumps(
+            data,
+            indent=4,
+            ensure_ascii=False,
         )
 
-        self._temp_data = []
+        self._atomic_write(content)
         self._is_changed = False
 
-    def _extend_state(self) -> None:
-        for k, v in self._temp_data:
-            self._state[k] = v
+    def _atomic_write(self, content: str) -> None:
+        fd, temp_path = tempfile.mkstemp(
+            dir=self.state_folder, prefix="state-", suffix=".tmp", text=True
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self.state_file)
+        except Exception:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+            raise
 
     def _load_state(self) -> None:
-        plain_text: str = self.state_file.read_text(encoding="utf-8")
-        plain_json: dict = json.loads(plain_text) if plain_text else {}
-        self._state = {k: StateNote.model_validate(v) for k, v in plain_json.items()}
+        try:
+            plain_text = self.state_file.read_text(encoding="utf-8")
+            if not plain_text:
+                self._state = {}
+                return
+
+            data = json.loads(plain_text)
+
+            version = data.get("version")
+            if version != STATE_SCHEMA_VERSION:
+                raise UnsupportedStateVersionError(
+                    f"Unsupported state schema version: {version}"
+                )
+
+            self._state = {
+                note_id: StateNote.model_validate(note)
+                for note_id, note in data["notes"].items()
+            }
+
+        except json.JSONDecodeError as exc:
+            raise InvalidStateError(
+                f"State file is corrupted: {self.state_file}. "
+                "Restore it from a backup or delete it and run the application again."
+            ) from exc
+
+        except ValidationError as exc:
+            raise InvalidStateError(
+                f"State file has an invalid format: {self.state_file}. "
+                "Restore it from a backup or delete it and run the application again."
+            ) from exc
