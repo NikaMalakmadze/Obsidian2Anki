@@ -7,7 +7,7 @@ import random
 import time
 
 
-from obsidian2anki.exceptions import AIInvalidOutput, AIRequestFailed, AIRetryExhausted
+from obsidian2anki.exceptions import AIInvalidOutput, AIRequestFailed, PromptError
 from obsidian2anki.models import FlashcardBatch, VaultNote, Flashcard
 from obsidian2anki.config import get_settings, Settings, BASE_DIR
 
@@ -69,12 +69,10 @@ class AI:
 
                 time.sleep(delay)
 
-        raise AIRetryExhausted(
-            f"Failed to generate flashcards after {self.max_retries} attempts."
-        )
-
     def _get_prompt(self) -> str:
         prompt_file: Path = BASE_DIR / self.settings.PROMPT_FILE
+        if not prompt_file.exists():
+            raise PromptError("Prompt file was not found")
         return prompt_file.read_text(encoding="utf-8")
 
     @staticmethod
