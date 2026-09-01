@@ -10,12 +10,28 @@ class AIError(O2ABaseException):
     pass
 
 
+class PromptError(AIError):
+    pass
+
+
 class AIInvalidOutput(AIError):
     pass
 
 
 class AIRequestFailed(AIError):
     pass
+
+
+class StateError(O2ABaseException):
+    """Base exception for state-related errors."""
+
+
+class InvalidStateError(StateError):
+    """State file is corrupted or invalid."""
+
+
+class UnsupportedStateVersionError(StateError):
+    """State file schema version is unsupported."""
 
 
 class AnkiError(O2ABaseException):
